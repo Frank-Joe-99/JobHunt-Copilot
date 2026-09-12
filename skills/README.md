@@ -24,11 +24,11 @@ skills/example_skill/
 | :--- | :--- | :--- |
 | [`resume_generator/`](./resume_generator/README.md) | **模块 0：本地简历排版引擎** | 基于 Typst/HTML+CSS，将数据编译为严谨 A4 单页 PDF |
 | [`resume_polisher/`](./resume_polisher/README.md) | **模块 1：STAR 法则润色与诊断** | 经历深度重塑、ATS 关键词分析、量化指标提取 |
-| [`job_radar/`](./job_radar/README.md) | **模块 1.5：全网校招岗位雷达** | 每日/每周校招新发岗位语义聚合与推荐简报 |
-| [`jd_matcher/`](./jd_matcher/README.md) | **模块 2：目标岗位 JD 深度穿透** | 技能树重合度雷达分析、量身定制自荐信与定制简历建议 |
-| [`project_recommender/`](./project_recommender/README.md) | **模块 2.5：开源实战与技能补短板** | GitHub 练手开源项目推荐、经历转 STAR 写作模板 |
-| [`mock_interviewer/`](./mock_interviewer/README.md) | **模块 3：AI 场景化模拟面试官** | 多轮追问交互状态机、面试复盘体检报告 |
-| [`application_tracker/`](./application_tracker/README.md) | **模块 4：求职投递看板** | 本地投递生命周期追踪、笔面试时间备忘 |
+| [`job_radar/`](./job_radar/README.md) | **模块 2：全网校招岗位雷达** | 每日/每周校招新发岗位语义聚合与推荐简报 |
+| [`jd_matcher/`](./jd_matcher/README.md) | **模块 3：目标岗位 JD 深度穿透** | 技能树重合度雷达分析、量身定制自荐信与定制简历建议 |
+| [`project_recommender/`](./project_recommender/README.md) | **模块 4：开源实战与技能补短板** | GitHub 练手开源项目推荐、经历转 STAR 写作模板 |
+| [`mock_interviewer/`](./mock_interviewer/README.md) | **模块 5：AI 场景化模拟面试官** | 多轮追问交互状态机、面试复盘体检报告 |
+| [`application_tracker/`](./application_tracker/README.md) | **模块 6：求职投递看板** | 本地投递生命周期追踪、笔面试时间备忘 |
 
 ---
 

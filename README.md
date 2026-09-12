@@ -73,11 +73,11 @@ JobHunt-Copilot/
 ├── skills/                      # 【专家业务技能包】封装专业求职方法论与 Prompt
 │   ├── resume_generator/        # 模块 0：本地排版引擎（支持 Typst / 现代化 HTML 转 PDF）
 │   ├── resume_polisher/         # 模块 1：STAR 法则经历润色与 ATS 诊断评分
-│   ├── job_radar/               # 模块 1.5：全网校招岗位雷达与定期语义推荐
-│   ├── jd_matcher/              # 模块 2：目标岗位 JD 深度穿透与“一岗一策”定制建议
-│   ├── project_recommender/     # 模块 2.5：技能缺口分析与 GitHub 优质开源实战推荐
-│   ├── mock_interviewer/        # 模块 3：支持多轮追问的 AI 场景化模拟面试官
-│   └── application_tracker/     # 模块 4：求职投递看板与时间线日程管理
+│   ├── job_radar/               # 模块 2：全网校招岗位雷达与定期语义推荐
+│   ├── jd_matcher/              # 模块 3：目标岗位 JD 深度穿透与“一岗一策”定制建议
+│   ├── project_recommender/     # 模块 4：技能缺口分析与 GitHub 优质开源实战推荐
+│   ├── mock_interviewer/        # 模块 5：支持多轮追问的 AI 场景化模拟面试官
+│   └── application_tracker/     # 模块 6：求职投递看板与时间线日程管理
 │
 ├── tools/                       # 【底层基础设施驱动】纯技术能力，不含业务逻辑
 │   ├── llm_client.py            # 统一大模型 API 调用封装（DeepSeek/OpenAI/Claude/Gemini）
@@ -109,31 +109,31 @@ JobHunt-Copilot/
   - 用户只需维护易读易改的 `config/profile.yaml` 或 Markdown。
   - 基于现代排版新星 **Typst** 或 HTML+CSS 模板，一键渲染出对齐严谨、字体优美、控制在 A4 一页纸内的工业级 PDF 简历。
   - 本地离线运行，零云端隐私泄露风险。
-* **模块 2.5：技能缺口分析与 GitHub 开源实战推荐 (Portfolio Booster)**
+* **模块 4：技能缺口分析与 GitHub 开源实战推荐 (Portfolio Booster)**
   - 针对目标岗位计算技能差距（如：“高并发、Redis缓存、Docker容器化”）。
   - 调用 GitHub API 检索 star 数适中、文档完备、适合应届生练手的开源项目。
   - 提供如何将开源实践转化为简历 STAR 描述的参考模板。
 
 ### 阶段二：机会雷达与精准匹配
-* **模块 1.5：全网校招岗位雷达 (Job Radar)**
-  - 接入合法公开招聘数据源，根据用户配置的意向行业与城市，自动计算 Embedding 语义相似度。
-  - 周期性（每日/每周）输出匹配度前 10 的新岗位简报与网申链接。
 * **模块 1：简历诊断与 STAR 法则重塑 (Resume Polisher)**
   - 按照 **STAR 原则**（情境 Situation、任务 Task、行动 Action、结果 Result）重构语句。
   - 强化量化指标（百分比、吞吐量、优化耗时、用户量），剔除空泛无力的副词与中庸表达。
-* **模块 2：目标岗位 JD 深度穿透 (JD Matcher)**
+* **模块 2：全网校招岗位雷达 (Job Radar)**
+  - 接入合法公开招聘数据源，根据用户配置的意向行业与城市，自动计算 Embedding 语义相似度。
+  - 周期性（每日/每周）输出匹配度前 10 的新岗位简报与网申链接。
+* **模块 3：目标岗位 JD 深度穿透 (JD Matcher)**
   - 输入目标企业招聘 JD，输出技能树重合度雷达分析与缺失关键词提示。
   - 自动生成高度定制的求职自荐信与一岗一策修改版简历。
 
 ### 阶段三：应试备战与实战冲刺
-* **模块 3：AI 真实场景模拟面试官 (Mock Interviewer)**
+* **模块 5：AI 真实场景模拟面试官 (Mock Interviewer)**
   - 支持多轮状态流转（破冰自我介绍 ➡️ 核心项目深度追问 ➡️ 计算机/专业八股 ➡️ 场景行为面 ➡️ 答疑反问）。
   - 面试结束后输出《复盘体检报告》，涵盖表达逻辑、技术深度、加分点与回答改进示例。
 * *[规划中] 扩展：校招性格测评与笔试避坑指南 (Assessment Shield)*
   - 解读北森/SHL测评机制，提示一致性校验与极端选项陷阱。
 
 ### 阶段四：全程管理与终局决策
-* **模块 4：求职投递看板 (Application Tracker)**
+* **模块 6：求职投递看板 (Application Tracker)**
   - 本地 SQLite 轻量记录投递企业、岗位、投递日期、笔试时间与当前面试进展。
 * *[规划中] 扩展：Offer 综合价值评估与三方协议排雷 (Offer Evaluator)*
   - 折算税后真实到手年包与时薪，排查劳动合同与三方协议违约风险。

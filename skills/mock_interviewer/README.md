@@ -1,4 +1,4 @@
-# 🎭 skills/mock_interviewer/：模块 3 AI 场景化模拟面试官
+# 🎭 skills/mock_interviewer/：模块 5 AI 场景化模拟面试官
 
 ## 🎯 业务定位与解决痛点
 - **解决痛点**：

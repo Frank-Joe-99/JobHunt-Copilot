@@ -1,4 +1,4 @@
-# 📋 skills/application_tracker/：模块 4 求职投递看板与时间线日程
+# 📋 skills/application_tracker/：模块 6 求职投递看板与时间线日程
 
 ## 🎯 业务定位与解决痛点
 - **解决痛点**：

@@ -1,4 +1,4 @@
-# 🚀 skills/project_recommender/：模块 2.5 技能缺口分析与 GitHub 开源实战推荐
+# 🚀 skills/project_recommender/：模块 4 技能缺口分析与 GitHub 开源实战推荐
 
 ## 🎯 业务定位与解决痛点
 - **解决痛点**：

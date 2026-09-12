@@ -17,6 +17,6 @@
 | 目录/文件 | 用途与生成物 |
 | :--- | :--- |
 | `resumes/` | 模块 0 生成的各版本 PDF 简历成品（如 `resume_default.pdf`、`resume_bytedance_backend.pdf`）。 |
-| `radar_reports/` | 模块 1.5 定期扫描后生成的校招新发岗位推荐简报（Markdown 格式）。 |
-| `interview_logs/` | 模块 3 AI 模拟面试问答的对话全景录音/文本，以及最终输出的《复盘体检报告》。 |
-| `tracker.db` | 模块 4 求职投递看板的本地轻量 SQLite 数据库文件。 |
+| `radar_reports/` | 模块 2 定期扫描后生成的校招新发岗位推荐简报（Markdown 格式）。 |
+| `interview_logs/` | 模块 5 AI 模拟面试问答的对话全景录音/文本，以及最终输出的《复盘体检报告》。 |
+| `tracker.db` | 模块 6 求职投递看板的本地轻量 SQLite 数据库文件。 |
