@@ -27,25 +27,25 @@
 本项目遵循 **“低耦合、高内聚、数据与逻辑彻底解耦”** 的现代工程架构：
 
 ```
-                ┌──────────────────────────────────────────────┐
-                │          多端交互层 (Multiple Interfaces)      │
-                │    (终端 CLI / Streamlit WebUI / Claude MCP)  │
-                └──────────────────────┬───────────────────────┘
+             ┌───────────────────────────────────────────────────┐
+             │                Multiple Interfaces                │
+             │   (Terminal CLI / Streamlit WebUI / Claude MCP)   │
+             └─────────────────────────┬─────────────────────────┘
                                        │
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                       Core 中枢控制与统一契约层                              │
-│         • state.py (基于 Pydantic 的全系统数据标准契约)                         │
-│         • workflow.py (基于状态机/流水线的工作流总线编排)                      │
+│                 Core Orchestration & Unified Contract Layer                 │
+│         • state.py (Unified Pydantic Data Contracts & Schemas)              │
+│         • workflow.py (State Machine & Pipeline Orchestration Engine)       │
 ├──────────────────────────────────────┬──────────────────────────────────────┤
-│          Skills (专家业务技能层)        │           Tools (底层基础设施层)       │
-│  • 模块 0: 本地简历排版 (Typst/HTML)  │  • 大模型统一客户端 (llm_client.py)   │
-│  • 模块 1: STAR 法则润色诊断          │  • PDF 渲染与解析器 (pdf_engine.py)   │
-│  • 模块 1.5: 全网校招岗位雷达        │  • GitHub API 驱动 (github_client.py) │
-│  • 模块 2: 目标岗位 JD 穿透定制      │  • 校招信息爬虫适配器 (crawler.py)    │
-│  • 模块 2.5: 开源实战补短板推荐       │                                      │
-│  • 模块 3: AI 场景化模拟面试官       │                                      │
-│  • 模块 4: 投递看板与时间线日程      │                                      │
+│    Skills (Domain Expert Modules)    │   Tools (Infrastructure & Drivers)   │
+│  • Mod 0: Resume Builder (Typst/HTML)│  • Unified LLM Client (llm_client.py)│
+│  • Mod 1: STAR Resume Polisher       │  • PDF Engine/Parser (pdf_engine.py) │
+│  • Mod 2: Campus Job Radar & Push    │  • GitHub Client (github_client.py)  │
+│  • Mod 3: Target JD Deep Matcher     │  • Job Web Crawler (crawler.py)      │
+│  • Mod 4: Project Portfolio Booster  │                                      │
+│  • Mod 5: AI Scenario Interviewer    │                                      │
+│  • Mod 6: Application Kanban Tracker │                                      │
 └──────────────────────────────────────┴──────────────────────────────────────┘
 ```
 
