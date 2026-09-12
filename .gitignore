@@ -1,0 +1,88 @@
+# ==============================================================================
+# Python & Byte-code
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==============================================================================
+# Virtual Environments
+# ==============================================================================
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ==============================================================================
+# IDEs & OS Files
+# ==============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==============================================================================
+# User Private Profiles & Sensitive Configurations
+# 保障求职者个人隐私：真实个人档案、求职偏好、系统密钥绝不提交至公共仓库
+# ==============================================================================
+config/profile.yaml
+config/profile.yml
+config/profile.md
+config/preferences.yaml
+config/preferences.yml
+config/settings.yaml
+config/settings.yml
+
+# 用户的真实个人照片、校徽等私人静态文件（保留 .gitkeep）
+config/assets/*
+!config/assets/.gitkeep
+!config/assets/sample_*
+
+# ==============================================================================
+# Storage & Generated Outputs
+# 运行产生的简历成品、数据库、抓取报告与面试录音/文本
+# ==============================================================================
+storage/resumes/*
+!storage/resumes/.gitkeep
+storage/radar_reports/*
+!storage/radar_reports/.gitkeep
+storage/interview_logs/*
+!storage/interview_logs/.gitkeep
+storage/*.db
+storage/*.sqlite
+storage/*.sqlite3
+
+# ==============================================================================
+# Logs & Temporary Files
+# ==============================================================================
+*.log
+logs/
+temp/
+tmp/
+scratch/

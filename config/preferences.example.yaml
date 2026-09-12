@@ -1,0 +1,42 @@
+# ==============================================================================
+# 求职偏好与机会雷达配置示例模板 (Preferences Template)
+# 请复制此文件为 preferences.yaml 并根据您的实际诉求修改
+# ==============================================================================
+
+job_radar:
+  enabled: true
+  fetch_interval_hours: 24             # 岗位雷达扫描周期 (小时)
+  max_recommendations_per_run: 10      # 每次推送的最大精选岗位数
+  min_match_score: 75                  # 最低匹配度阈值 (0-100)，低于该分数不推送
+
+search_criteria:
+  target_roles:
+    - "后端开发工程师"
+    - "Python工程师"
+    - "大模型应用开发工程师"
+    - "分布式存储工程师"
+  target_locations:
+    - "北京"
+    - "杭州"
+    - "上海"
+    - "远程"
+  company_types:
+    - "头部互联网大厂"
+    - "独角兽创业公司"
+    - "科研院所 / 国企数字化研发中心"
+  expected_salary_monthly_k:
+    min: 18
+    max: 35
+
+channels:
+  v2ex_jobs: true
+  nowcoder_campus: true                # 牛客校招公开动态
+  rss_sources:
+    - "https://example-campus-jobs.com/rss"
+
+notification:
+  generate_markdown_report: true       # 在 storage/radar_reports/ 生成简报
+  terminal_alert: true                 # 控制台输出提示
+  email_notification:
+    enabled: false
+    receiver_email: "your_email@example.com"

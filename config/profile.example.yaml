@@ -1,0 +1,99 @@
+# ==============================================================================
+# 个人主档案示例模板 (Profile Template)
+# 请复制此文件为 profile.yaml 并填写您自己的真实经历
+# ==============================================================================
+
+basics:
+  name: "张三"
+  gender: "男"
+  birth_year: 2002
+  phone: "138-0000-0000"
+  email: "zhangsan@example.com"
+  location: "北京"
+  political_status: "中共党员"
+  avatar: "config/assets/avatar.png"     # 证件照相对路径（可选）
+  github: "https://github.com/zhangsan"
+  linkedin: "https://linkedin.com/in/zhangsan"
+  blog: "https://zhangsan.dev"
+
+objective:
+  target_role: "后端开发工程师"
+  target_industry: "互联网 / 人工智能"
+  expected_locations: ["北京", "杭州", "上海"]
+
+education:
+  - school: "北京理工大学"
+    degree: "硕士"
+    major: "计算机科学与技术"
+    start_date: "2023.09"
+    end_date: "2026.06"
+    gpa: "3.8/4.0 (专业前 5%)"
+    ranking: "Top 5%"
+    logo: "config/assets/school_logo.png"  # 校徽矢量图（可选）
+    courses:
+      - "高级算法设计"
+      - "分布式系统架构"
+      - "数据库内核实现"
+      - "大语言模型原理"
+  - school: "北京理工大学"
+    degree: "学士"
+    major: "软件工程"
+    start_date: "2019.09"
+    end_date: "2023.06"
+    gpa: "3.7/4.0"
+    ranking: "Top 10%"
+
+skills:
+  programming_languages:
+    - name: "Python"
+      level: "精通"
+      details: "熟悉并发编程、FastAPI、异步 IO 及底层 GIL 机制"
+    - name: "Go"
+      level: "熟练"
+      details: "熟悉 Goroutine 并发模型、Gin 框架及微服务开发"
+    - name: "C/C++"
+      level: "良好"
+      details: "具备扎实的数据结构与指针内存管理基础"
+  frameworks_and_tools:
+    - "FastAPI / Flask / Django"
+    - "Docker / Kubernetes / Git / Linux"
+    - "LangChain / LangGraph / LlamaIndex"
+  databases:
+    - "MySQL (熟练索引优化、事务隔离与分库分表)"
+    - "Redis (熟悉缓存穿透/击穿方案、持久化与分布式锁)"
+    - "Milvus / Chroma (向量数据库检索与落地)"
+
+internships:
+  - company: "某头部大厂"
+    department: "基础架构研发部"
+    role: "后端开发实习生"
+    start_date: "2025.06"
+    end_date: "2025.11"
+    city: "北京"
+    highlights:
+      - "【背景】负责日均千万级请求的配置中心微服务重构与性能调优。"
+      - "【行动】引入 Redis 二级多级缓存与本地 LRU，重构高频查询链路；解决高并发下的缓存击穿问题。"
+      - "【结果】接口 P99 延迟由 120ms 降至 18ms，单机 QPS 提升 3.2 倍，平稳支撑双十一大促。"
+
+projects:
+  - name: "基于大模型的智能应聘助手 (JobHunt-Copilot)"
+    role: "核心开发者 / 个人项目"
+    start_date: "2026.01"
+    end_date: "2026.03"
+    tech_stack: ["Python", "LangGraph", "FastAPI", "Typst", "Docker"]
+    repo_url: "https://github.com/zhangsan/JobHunt-Copilot"
+    highlights:
+      - "【架构设计】基于 LangGraph 设计多状态机调度引擎，实现简历诊断、JD深度匹配与多轮模拟面试闭环。"
+      - "【技术突破】采用 Typst 排版编译引擎，将结构化数据自动导出为毫米级精准对齐的 A4 简历，彻底杜绝排版错位。"
+      - "【协议创新】原生实现 Model Context Protocol (MCP) 适配器，支持被 Claude 等主流桌面智能体一键接入调用。"
+
+honors_and_awards:
+  - title: "国家奖学金 (本硕均获)"
+    date: "2024.11"
+    level: "国家级"
+  - title: "中国高校计算机大赛 (CCCC) 全国一等奖"
+    date: "2022.08"
+    level: "国家级"
+
+certifications:
+  - "英语六级 (CET-6): 610 分 (具备流畅英文文献阅读与技术交流能力)"

@@ -1,0 +1,46 @@
+# ==============================================================================
+# 系统运行与大模型配置示例模板 (Settings Template)
+# 请复制此文件为 settings.yaml 并填入您的 API Key 与运行参数
+# ==============================================================================
+
+app:
+  name: "JobHunt-Copilot"
+  version: "0.1.0"
+  log_level: "INFO"                    # DEBUG, INFO, WARNING, ERROR
+
+llm:
+  # 默认使用的大模型供应商 (支持: deepseek, openai, claude, gemini, ollama)
+  default_provider: "deepseek"
+  
+  providers:
+    deepseek:
+      api_key: "sk-your-deepseek-api-key"
+      base_url: "https://api.deepseek.com/v1"
+      model: "deepseek-chat"           # 或 deepseek-reasoner (R1)
+      temperature: 0.3
+      max_tokens: 4096
+      
+    openai:
+      api_key: "sk-your-openai-api-key"
+      base_url: "https://api.openai.com/v1"
+      model: "gpt-4o"
+      temperature: 0.3
+      max_tokens: 4096
+
+    claude:
+      api_key: "sk-ant-your-claude-api-key"
+      model: "claude-3-5-sonnet-20241022"
+      temperature: 0.3
+
+    gemini:
+      api_key: "your-gemini-api-key"
+      model: "gemini-1.5-pro"
+      temperature: 0.3
+
+resume_generation:
+  engine: "typst"                      # 推荐使用 typst，也可以使用 html
+  default_template: "modern_geek"      # 默认模版名称
+  page_limit: 1                        # 强约束：A4 纸一页之内
+
+github:
+  token: ""                            # 提高 GitHub API 速率限制（可选）
