@@ -221,8 +221,8 @@ python main.py interview start --role "后端开发工程师"
 
 - [ ] **Phase 1: 核心规范与本地排版引擎**
   - [x] 完成架构分层设计与标准化工程脚手架搭建
-  - [ ] 制定 `config/profile.yaml` 详细字段规范与示例
-  - [ ] 实现 `core/state.py` Pydantic 数据契约
+  - [x] 制定 `config/profile.yaml` 详细字段规范与示例
+  - [x] 实现 `core/state.py` Pydantic 数据契约
   - [ ] 实现 `skills/resume_generator` 模块（集成 Typst/HTML 模板渲染）
 - [ ] **Phase 2: LLM 技能接入 (STAR 润色与 JD 匹配)**
   - [ ] 封装 `tools/llm_client.py` 多模型适配层
