@@ -3,7 +3,9 @@
 > **专为应届毕业生量身打造的全生命周期 AI 求职智能体系统**  
 > 本地隐私优先 · STAR 经历重塑 · 智能排版引擎 · 岗位雷达 · 开源实战补短板 · AI 模拟面试 · 原生支持 MCP 协议
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Pydantic v2](https://img.shields.io/badge/Pydantic-v2.7%2B-e92063.svg)](https://docs.pydantic.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Protocol: MCP](https://img.shields.io/badge/Protocol-MCP-orange.svg)](https://modelcontextprotocol.io/)
 [![Architecture: Decoupled](https://img.shields.io/badge/Architecture-Skills%20%26%20Tools-purple.svg)]()
@@ -61,13 +63,13 @@
 ```text
 JobHunt-Copilot/
 ├── config/                      # 【用户档案与配置中心】个人资产沉淀，严禁上传公共代码库
-│   ├── profile.example.yaml     # 个人主档案标准范例模板
-│   ├── preferences.example.yaml # 求职意愿与偏好范例模板
-│   ├── settings.example.yaml    # 系统与模型 API 配置范例模板
+│   ├── profile.example.yaml     # 个人主档案标准范例模板（涵盖本科/硕博学术科研、直博等）
+│   ├── preferences.example.yaml # 求职意愿与岗位雷达抓取过滤范例模板
+│   ├── settings.example.yaml    # 系统与大模型 API Key 运行参数范例模板
 │   └── assets/                  # 个人静态资源目录（证件照、校徽矢量图等）
 │
 ├── core/                        # 【核心控制与契约层】系统总线与数据标准
-│   ├── state.py                 # 全局数据模型定义（Resume, JobDescription, SkillGap等）
+│   ├── state.py                 # 全局 Pydantic V2 强类型数据契约（UserProfile, JobPreferences, AppSettings）
 │   └── workflow.py              # 业务工作流与状态机编排引擎
 │
 ├── skills/                      # 【专家业务技能包】封装专业求职方法论与 Prompt
@@ -95,6 +97,8 @@ JobHunt-Copilot/
 │   ├── mcp_server.py            # Model Context Protocol 服务实现（供 Claude/IDE 调用）
 │   └── function_schemas.py      # OpenAI / DeepSeek Function Calling 描述导出
 │
+├── pyproject.toml               # 现代化项目依赖与构建规范 (PEP 621)
+├── uv.lock                      # 全局依赖版本与哈希确定性锁定文件
 ├── .gitignore                   # 隐私保护与工程忽略规则
 ├── LICENSE                      # 开源许可协议 (MIT)
 └── README.md                    # 本说明文档
@@ -142,33 +146,39 @@ JobHunt-Copilot/
 
 ## 🚀 快速上手 (Quick Start)
 
-### 1. 环境准备
-确保已安装 Python 3.10 以上版本，并克隆本项目：
+### 1. 环境准备与依赖安装
+本项目使用现代 Python 包管理器 **[uv](https://github.com/astral-sh/uv)** 进行极速环境初始化与依赖锁定（秒级完成）：
+
 ```bash
+# 1. 克隆本项目
 git clone https://github.com/Frank-Joe-99/JobHunt-Copilot.git
 cd JobHunt-Copilot
 
-# 创建并激活虚拟环境
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# Linux/macOS
-source .venv/bin/activate
-
-# 安装依赖
-pip install -r requirements.txt
+# 2. 一键创建虚拟环境并安装全部依赖 (基于 pyproject.toml 与 uv.lock)
+uv sync
 ```
 
-### 2. 配置个人主档案
+> 💡 *若本地尚未安装 uv，可通过 `pip install uv` 安装；亦可通过传统 `python -m venv .venv` 创建虚拟环境。*
+
+---
+
+### 2. 配置个人主档案与密钥
 在 `config/` 目录下根据范例复制并创建您的主档案：
 ```bash
+# Windows PowerShell 或 Linux/macOS
 cp config/profile.example.yaml config/profile.yaml
 cp config/preferences.example.yaml config/preferences.yaml
 cp config/settings.example.yaml config/settings.yaml
 ```
-- 编辑 `config/profile.yaml`：填入真实的教育背景、技能清单与经历信息。
-- 编辑 `config/settings.yaml`：配置您的大模型 API 密钥（如 DeepSeek、OpenAI、Gemini 等）。
+- 编辑 `config/profile.yaml`：填入真实的教育背景、技能清单与经历信息（支持本科、硕博学术科研论文与直博经历）。
+- 编辑 `config/preferences.yaml`：设定目标岗位、期望城市与薪资、岗位雷达扫描过滤条件。
+- 编辑 `config/settings.yaml`：配置您的大模型 API 密钥（支持 DeepSeek、OpenAI、Claude、Gemini 等）。
 - 放置照片资源至 `config/assets/`（如 `avatar.png`、`school_logo.png`）。
+
+**配置一键自检**：在终端执行单行命令，验证配置文件是否符合 Pydantic 强类型契约：
+```bash
+uv run python -c "from core.state import UserProfile, JobPreferences, AppSettings; import yaml; UserProfile.model_validate(yaml.safe_load(open('config/profile.yaml', encoding='utf-8'))); print('✅ 配置文件校验通过！')"
+```
 
 ### 3. 使用场景示例 (规划路线)
 
@@ -221,8 +231,9 @@ python main.py interview start --role "后端开发工程师"
 
 - [ ] **Phase 1: 核心规范与本地排版引擎**
   - [x] 完成架构分层设计与标准化工程脚手架搭建
-  - [x] 制定 `config/profile.yaml` 详细字段规范与示例
-  - [x] 实现 `core/state.py` Pydantic 数据契约
+  - [x] 迁移至现代化 Python 包管理与依赖锁定（`pyproject.toml` + `uv.lock`）
+  - [x] 制定 `config/` 详细字段规范与模板（覆盖本科、硕博科研论文、直博经历与雷达偏好）
+  - [x] 完整实现 `core/state.py` Pydantic V2 全系统强类型数据契约（`UserProfile`, `JobPreferences`, `AppSettings`）
   - [ ] 实现 `skills/resume_generator` 模块（集成 Typst/HTML 模板渲染）
 - [ ] **Phase 2: LLM 技能接入 (STAR 润色与 JD 匹配)**
   - [ ] 封装 `tools/llm_client.py` 多模型适配层
