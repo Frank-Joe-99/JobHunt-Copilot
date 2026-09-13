@@ -7,14 +7,18 @@ basics:
   name: "张三"
   gender: "男"
   birth_year: 2002
-  phone: "138-0000-0000"
-  email: "zhangsan@example.com"
-  location: "北京"
-  political_status: "中共党员"
-  avatar: "config/assets/avatar.png"     # 证件照相对路径（可选）
-  github: "https://github.com/zhangsan"
-  linkedin: "https://linkedin.com/in/zhangsan"
-  blog: "https://zhangsan.dev"
+  phone: "138-0000-0000"                       # 电话号码
+  email: "zhangsan@example.com"                # 电子邮件
+  location: "北京"                              # 现居住地
+  political_status: "中共党员"                  # 政治面貌
+  avatar: "config/assets/avatar.png"           # 证件照相对路径
+  school: "复旦大学"                            # 当前就读大学
+  school_logo: "config/assets/school_logo.png"  # 校徽矢量图（可选）
+  department: "物理学系"                        # 当前院系
+  degree: "博士在读"                            # 当前攻读学位
+  github: "https://github.com/zhangsan"        # 可选项
+  linkedin: "https://linkedin.com/in/zhangsan" # 可选项
+  blog: "https://zhangsan.dev"                 # 可选项
 
 objective:
   target_role: "后端开发工程师"
@@ -27,14 +31,16 @@ education:
     major: "计算机科学与技术"
     start_date: "2023.09"
     end_date: "2026.06"
-    gpa: "3.8/4.0 (专业前 5%)"
+    # 以下内容可选填
+    courses: ["高级算法设计", "分布式系统架构", "数据库内核实现", "大语言模型原理"]
+    gpa: "3.8/4.0"
     ranking: "Top 5%"
+    award: ["院系奖学金", "国家奖学金"] # 简单写一下
+    research_direction: "大语言模型推理优化"
+    advisor: "导师姓名"
+    laboratory: "国家重点实验室"
     logo: "config/assets/school_logo.png"  # 校徽矢量图（可选）
-    courses:
-      - "高级算法设计"
-      - "分布式系统架构"
-      - "数据库内核实现"
-      - "大语言模型原理"
+  # 新的一段教育经历
   - school: "北京理工大学"
     degree: "学士"
     major: "软件工程"
@@ -42,6 +48,7 @@ education:
     end_date: "2023.06"
     gpa: "3.7/4.0"
     ranking: "Top 10%"
+    award: ["院系奖学金", "国家奖学金"]
 
 skills:
   programming_languages:
@@ -63,7 +70,7 @@ skills:
     - "Redis (熟悉缓存穿透/击穿方案、持久化与分布式锁)"
     - "Milvus / Chroma (向量数据库检索与落地)"
 
-internships:
+internships: # 实习，可选，没有可以不写
   - company: "某头部大厂"
     department: "基础架构研发部"
     role: "后端开发实习生"
@@ -75,7 +82,7 @@ internships:
       - "【行动】引入 Redis 二级多级缓存与本地 LRU，重构高频查询链路；解决高并发下的缓存击穿问题。"
       - "【结果】接口 P99 延迟由 120ms 降至 18ms，单机 QPS 提升 3.2 倍，平稳支撑双十一大促。"
 
-projects:
+projects: # 项目，可选，没有可以不写
   - name: "基于大模型的智能应聘助手 (JobHunt-Copilot)"
     role: "核心开发者 / 个人项目"
     start_date: "2026.01"
@@ -87,6 +94,24 @@ projects:
       - "【技术突破】采用 Typst 排版编译引擎，将结构化数据自动导出为毫米级精准对齐的 A4 简历，彻底杜绝排版错位。"
       - "【协议创新】原生实现 Model Context Protocol (MCP) 适配器，支持被 Claude 等主流桌面智能体一键接入调用。"
 
+research: # 科研项目，主要针对硕博生，本科可以不写或写毕业论文内容，（可选，没有可以不写）
+  - name: "四大力学在当前高校教学中的教材使用情况调研"
+    role: "项目负责人"
+    start_date: "2022.01"
+    end_date: "2024.01"
+    highlights:
+      - "项目内容：调研四大力学在当前高校教学中的使用了什么教材"
+      - "项目成果：发现国内顶级高校大多选择自编教材"
+
+articles: # 论文，可选，没有可以不写
+  - cite: "Vaswani A, Shazeer N, Parmar N, et al. Attention is all you need[J]. Advances in neural information processing systems, 2017, 30."
+    author_order: "第一作者"    # 作者顺序
+    impact_factor: 7.58        # 期刊或会议影响因子，可选
+    cas_partition: "一区"       # 中科院分区，可选
+    citation_counts: 269221    # 引用次数
+
+
+
 honors_and_awards:
   - title: "国家奖学金 (本硕均获)"
     date: "2024.11"
@@ -96,4 +121,6 @@ honors_and_awards:
     level: "国家级"
 
 certifications:
-  - "英语六级 (CET-6): 610 分 (具备流畅英文文献阅读与技术交流能力)"
+  - certificate: "英语六级 (CET-6)"
+    detail: ": 425 分 (具备流畅英文文献阅读与技术交流能力)" # 可选
+  - certificate: "计算机等级证书"

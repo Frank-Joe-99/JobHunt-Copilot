@@ -18,13 +18,69 @@
 
 ---
 
-## 🔒 隐私保护最佳实践
+## 🚀 YAML 配置文件使用指南
 
-1. **首次使用**：
-   ```bash
-   cp config/profile.example.yaml config/profile.yaml
-   cp config/preferences.example.yaml config/preferences.yaml
-   cp config/settings.example.yaml config/settings.yaml
-   ```
-2. **切勿更改文件名后缀**：系统默认读取 `config/profile.yaml`（未来也可支持 `config/profile.md` 解析）。
-3. **敏感信息保障**：`.gitignore` 已预设过滤所有 `.yaml` 真实配置文件及 `assets/` 下的私人照片，确保即便将项目开源或备份，也不会发生个人隐私泄露。
+### 1. 快速初始化（首次使用）
+在首次拉取项目或开始使用前，执行以下命令从示例模板创建你的本地私有配置：
+
+```bash
+# Windows PowerShell 或 Linux/macOS Bash
+cp config/profile.example.yaml config/profile.yaml
+cp config/preferences.example.yaml config/preferences.yaml
+cp config/settings.example.yaml config/settings.yaml
+```
+
+> 🔒 **隐私安全保障**：所有真实 `.yaml` 配置文件和 `assets/` 下的私人照片均已被 `.gitignore` 严格忽略，绝不会被意外推送到 GitHub 等公共代码仓库。
+
+---
+
+### 2. 核心 YAML 文件配置与填写指引
+
+#### ① `config/profile.yaml`（个人主档案）
+* **定位**：求职者的核心“个人资产库”。系统内所有简历排版、经历润色、模拟面试的原始输入源。
+* **填写要点**：
+  * `basics`：姓名、出生年份、电话、邮箱、现居城市为必填；头像照片推荐存入 `config/assets/avatar.png`；
+  * `education`：按时间倒序填写（最高学历在前），支持本科、硕士、博士、直博；
+  * `skills`：掌握的编程语言及熟练度、常用框架与数据库；
+  * `internships` / `projects`：实习与项目经历，建议每条亮点遵循 **STAR 法则**（情境、任务、行动、量化成果）；
+  * `research` / `articles`：硕博或学术方向可填写科研课题与论文发表（本科生可留空或直接删除对应项）。
+
+#### ② `config/preferences.yaml`（求职偏好与雷达规则）
+* **定位**：机会雷达扫描与匹配过滤规则。
+* **填写要点**：
+  * `search_criteria`：目标岗位列表（`target_roles`）、意向城市（`target_locations`）、月薪范围（`expected_salary_monthly_k`）；
+  * `job_radar`：抓取间隔小时数（`fetch_interval_hours`）、最低匹配度打分阈值（`min_match_score`，低于此分数的岗位不提示）；
+  * `channels`：启用或关闭特定的招聘抓取渠道（牛客、V2EX、RSS 源）。
+
+#### ③ `config/settings.yaml`（系统与模型运行参数）
+* **定位**：驱动底层工具运转的基础设施配置与 API 密钥。
+* **填写要点**：
+  * `llm.default_provider`：指定默认大模型厂商（如 `deepseek`、`openai` 或 `claude`）；
+  * `llm.providers`：填入对应厂商的 `api_key`、`model`、`base_url`；
+  * `resume_generation`：排版引擎选择（推荐 `engine: "typst"`，毫秒级排版且无复杂环境依赖）；
+  * `github.token`：可选填 GitHub Personal Access Token（用于提高开源项目推荐时的 API 速率限制）。
+
+---
+
+### 3. 如何在 Python 中加载与校验 YAML 文件？
+
+在项目代码中，推荐使用 `core/state.py` 提供的强类型模型反序列化加载。也可以在终端执行单行命令快速校验自己的配置文件是否有格式错误：
+
+```powershell
+uv run python -c "
+import yaml
+from core.state import UserProfile, JobPreferences, AppSettings
+
+# 校验个人主档案
+profile = UserProfile.model_validate(yaml.safe_load(open('config/profile.yaml', encoding='utf-8')))
+print('✅ profile.yaml 校验通过！姓名:', profile.basics.name)
+
+# 校验求职偏好
+prefs = JobPreferences.model_validate(yaml.safe_load(open('config/preferences.yaml', encoding='utf-8')))
+print('✅ preferences.yaml 校验通过！目标岗位数:', len(prefs.search_criteria.target_roles))
+
+# 校验系统设置
+settings = AppSettings.model_validate(yaml.safe_load(open('config/settings.yaml', encoding='utf-8')))
+print('✅ settings.yaml 校验通过！默认大模型:', settings.llm.default_provider)
+"
+```
