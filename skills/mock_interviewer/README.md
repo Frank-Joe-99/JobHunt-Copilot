@@ -14,22 +14,22 @@
 
 ## 🔄 面试流程状态机设计
 ```text
-[阶段 0: 破冰] ──────> 自我介绍与求职动机
-                          │
-                          ▼
-[阶段 1: 简历穿透] ───> 针对 profile 中的核心项目与实习经历深挖行动与技术选型
-                          │
-                          ▼
-[阶段 2: 专业八股] ───> 考查岗位核心基本功（数据结构、计算机网络、框架底层机制等）
-                          │
-                          ▼
-[阶段 3: 场景与行为] ─> BQ 行为面试（团队冲突、沟通协调、抗压与故障排查经历）
-                          │
-                          ▼
-[阶段 4: 答疑反问] ───> 考生反问环节，评估反问深度与职场成熟度
-                          │
-                          ▼
-[阶段 5: 复盘终局] ───> 输出多维度能力雷达打分与详细修改建议报告
+[Stage 0: Icebreaking] ─────────> Self-introduction & job motivation
+                                     │
+                                     ▼
+[Stage 1: Resume Deep Dive] ────> Technical deep dive into core projects & experiences
+                                     │
+                                     ▼
+[Stage 2: Core Fundamentals] ───> Essential domain knowledge (Data structures, Networks, etc.)
+                                     │
+                                     ▼
+[Stage 3: Behavioral & BQ] ─────> Behavioral questions (Teamwork, Conflict resolution, Stress)
+                                     │
+                                     ▼
+[Stage 4: Reverse Q&A] ─────────> Candidate reverse Q&A, evaluating depth & maturity
+                                     │
+                                     ▼
+[Stage 5: Debrief & Summary] ───> Multi-dimensional evaluation radar & feedback report
 ```
 
 ---

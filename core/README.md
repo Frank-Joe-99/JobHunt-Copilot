@@ -7,17 +7,17 @@
 ## 🏛️ 核心架构职责
 
 ```
-                ┌──────────────────────────────────┐
-                │          core/state.py           │
-                │    (全系统 Pydantic 数据契约)     │
-                └─────────────────┬────────────────┘
-                                  │ 规定标准数据流向
+                ┌────────────────────────────────────┐
+                │           core/state.py            │
+                │  (Global Pydantic Data Contracts)  │
+                └─────────────────┬──────────────────┘
+                                  │ Defines standard data flow
                                   ▼
-                ┌──────────────────────────────────┐
-                │        core/workflow.py          │
-                │      (业务工作流/状态机编排)      │
-                └─────────────────┬────────────────┘
-                                  │ 调度专家技能
+                ┌────────────────────────────────────┐
+                │          core/workflow.py          │
+                │ (Workflow & State Machine Engine)  │
+                └─────────────────┬──────────────────┘
+                                  │ Dispatches expert skills
         ┌─────────────────────────┼─────────────────────────┐
         ▼                         ▼                         ▼
 skills/resume_polisher    skills/jd_matcher      skills/mock_interviewer

@@ -7,19 +7,19 @@
 ## 🌐 核心适配能力
 
 ```
-                  ┌───────────────────────────────────────────────┐
-                  │         外部调用环境 (External Harness)       │
-                  └───────────────┬───────────────────┬───────────┘
-                                  │ (MCP 协议)        │ (Function Calling)
-                                  ▼                   ▼
-                  ┌───────────────────────┬───────────────────────┐
-                  │ adapters/mcp_server.py│ adapters/             │
-                  │ (Claude Desktop /     │  function_schemas.py  │
-                  │  Zed / Cursor)        │ (DeepSeek/OpenAI/RAG) │
-                  └───────────────┬───────┴───────────┬───────────┘
-                                  └─────────┬─────────┘
-                                            ▼
-                                 调度 skills/ 核心专家业务
+            ┌───────────────────────────────────────────────┐
+            │    External Calling Environments (Harnesses)  │
+            └───────────────┬───────────────────┬───────────┘
+                            │ (MCP Protocol)    │ (Function Calling)
+                            ▼                   ▼
+            ┌───────────────────────┬───────────────────────┐
+            │ adapters/mcp_server.py│ adapters/             │
+            │ (Claude Desktop /     │  function_schemas.py  │
+            │  Zed / Cursor)        │ (DeepSeek/OpenAI/RAG) │
+            └───────────────┬───────┴───────────┬───────────┘
+                            └─────────┬─────────┘
+                                      ▼
+                        Dispatch to Core Expert Skills
 ```
 
 ### 1. `mcp_server.py`（Anthropic Model Context Protocol 适配器）

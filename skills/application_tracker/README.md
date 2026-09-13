@@ -13,7 +13,7 @@
 
 ## 📊 投递阶段流转状态
 ```text
-[已选定/待投] ──> [网申已投递] ──> [测评/笔试中] ──> [初试/一面] ──> [复试/终面] ──> [HR面/待发Offer] ──> [已获Offer / 流程终止]
+[Wishlist / To Apply] ──> [Applied] ──> [Online Assessment] ──> [1st Round] ──> [Final Round] ──> [HR / Offer Pending] ──> [Offer Accepted / Closed]
 ```
 
 ---

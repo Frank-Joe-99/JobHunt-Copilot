@@ -14,16 +14,17 @@
 
 ## 🔄 数据流转架构
 ```text
-[公开校招/招聘数据源] ──(tools/crawler.py)──> 原始岗位列表
-                                                    │
-                                                    ▼
-[用户偏好 (preferences.yaml)] ──> 语义相关性比对 & 过滤打分
-                                                    │
-                                                    ▼
-                                    Top-N 高契合度校招新发岗位
-                                                    │
-                                                    ▼
-                             生成 storage/radar_reports/日报/周报 (Markdown)
+[Public Job / Campus Sources] ──(tools/crawler.py)──> Raw Job Listings
+                                                             │
+                                                             ▼
+[User Preferences (preferences.yaml)] ───────────────> Semantic Matching & Scoring
+                                                             │
+                                                             ▼
+                                                Top-N High-Match Job Openings
+                                                             │
+                                                             ▼
+                                               Generate storage/radar_reports/ 
+                                               Daily/Weekly Reports (Markdown)
 ```
 
 ---
