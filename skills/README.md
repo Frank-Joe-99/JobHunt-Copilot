@@ -22,7 +22,7 @@ skills/example_skill/
 
 | 模块目录 | 对应功能 | 核心交付物 |
 | :--- | :--- | :--- |
-| [`resume_generator/`](./resume_generator/README.md) | **模块 0：本地简历排版引擎** | 基于 Typst/HTML+CSS，将数据编译为严谨 A4 单页 PDF |
+| [`resume_generator/`](./resume_generator/README.md) | **模块 0：本地简历排版引擎** | 基于 Typst 与 python-docx，一键同时导出 A4 严密排版的 **Word (.docx) + PDF (.pdf)** 双版本 |
 | [`resume_polisher/`](./resume_polisher/README.md) | **模块 1：STAR 法则润色与诊断** | 经历深度重塑、ATS 关键词分析、量化指标提取 |
 | [`job_radar/`](./job_radar/README.md) | **模块 2：全网校招岗位雷达** | 每日/每周校招新发岗位语义聚合与推荐简报 |
 | [`jd_matcher/`](./jd_matcher/README.md) | **模块 3：目标岗位 JD 深度穿透** | 技能树重合度雷达分析、量身定制自荐信与定制简历建议 |

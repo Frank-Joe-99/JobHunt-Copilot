@@ -21,15 +21,15 @@
 // 排版辅助函数
 // =====================================================================
 
-// 板块标题：加大板块间距，并在横线上下留出阅读空间。
+// 板块标题：加大不同内容块之间的间距，并在横线与文字之间留出更多呼吸感
 #let section(title) = block(
   width: 100%,
-  above: 12pt,
-  below: 6pt,
+  above: 18pt,
+  below: 8pt,
   breakable: false,
   sticky: true,
-  inset: (bottom: 5pt),
-  stroke: (bottom: 0.5pt + line_color),
+  inset: (bottom: 8pt),
+  stroke: (bottom: 0.6pt + line_color),
 )[#text(size: 11pt, weight: "bold")[#title]]
 
 // 左右布局行

@@ -69,11 +69,12 @@ JobHunt-Copilot/
 │   └── assets/                  # 个人静态资源目录（证件照、校徽矢量图等）
 │
 ├── core/                        # 【核心控制与契约层】系统总线与数据标准
+│   ├── config.py                # 统一配置加载器（加载并校验 profile/preferences/settings.yaml）
 │   ├── state.py                 # 全局 Pydantic V2 强类型数据契约（UserProfile, JobPreferences, AppSettings）
 │   └── workflow.py              # 业务工作流与状态机编排引擎
 │
 ├── skills/                      # 【专家业务技能包】封装专业求职方法论与 Prompt
-│   ├── resume_generator/        # 模块 0：本地排版引擎（支持 Typst / 现代化 HTML 转 PDF）
+│   ├── resume_generator/        # 模块 0：本地排版引擎（支持 Word .docx 与 Typst .pdf 双版本镜像输出）
 │   ├── resume_polisher/         # 模块 1：STAR 法则经历润色与 ATS 诊断评分
 │   ├── job_radar/               # 模块 2：全网校招岗位雷达与定期语义推荐
 │   ├── jd_matcher/              # 模块 3：目标岗位 JD 深度穿透与“一岗一策”定制建议
@@ -109,9 +110,11 @@ JobHunt-Copilot/
 ## 🧩 核心功能矩阵（全生命周期流）
 
 ### 阶段一：资产沉淀与背景提升
-* **模块 0：本地排版引擎 (Profile & Generator)**
-  - 用户只需维护易读易改的 `config/profile.yaml` 或 Markdown。
-  - 基于现代排版新星 **Typst** 或 HTML+CSS 模板，一键渲染出对齐严谨、字体优美、控制在 A4 一页纸内的工业级 PDF 简历。
+* **模块 0：本地双格式排版引擎 (Profile & Generator)**
+  - 用户只需维护易读易改的 `config/profile.yaml`。
+  - 一键同时生成 **Word (.docx)** 与 **PDF (.pdf)** 双版本：
+    - **Word 版本**：基于 `python-docx` 渲染，方便针对不同企业岗位快速手工微调细节。
+    - **PDF 版本**：基于现代排版新星 **Typst** 毫秒级编译，杜绝跨系统排版错位，符合工业级/学术级视觉规范。
   - 本地离线运行，零云端隐私泄露风险。
 * **模块 4：技能缺口分析与 GitHub 开源实战推荐 (Portfolio Booster)**
   - 针对目标岗位计算技能差距（如：“高并发、Redis缓存、Docker容器化”）。
@@ -122,7 +125,7 @@ JobHunt-Copilot/
 * **模块 1：简历诊断与 STAR 法则重塑 (Resume Polisher)**
   - 按照 **STAR 原则**（情境 Situation、任务 Task、行动 Action、结果 Result）重构语句。
   - 强化量化指标（百分比、吞吐量、优化耗时、用户量），剔除空泛无力的副词与中庸表达。
-* **模块 2：全网校招岗位雷达 (Job Radar)**
+* **模块 2：全网校招岗位雷达 (Job Radar，暂时不开发)**
   - 接入合法公开招聘数据源，根据用户配置的意向行业与城市，自动计算 Embedding 语义相似度。
   - 周期性（每日/每周）输出匹配度前 10 的新岗位简报与网申链接。
 * **模块 3：目标岗位 JD 深度穿透 (JD Matcher)**
@@ -182,10 +185,10 @@ uv run python -c "from core.state import UserProfile, JobPreferences, AppSetting
 
 ### 3. 使用场景示例 (规划路线)
 
-**场景 A：一键生成本地 PDF 简历**
+**场景 A：一键生成本地 Word + PDF 双格式简历**
 ```bash
-python main.py resume generate --template modern
-# 产物将保存至: storage/resumes/resume_default.pdf
+uv run python -c "from skills.resume_generator.handler import generate_resume; res = generate_resume(); print('Word:', res['docx']); print('PDF:', res['pdf'])"
+# 产物将保存至: storage/resumes/resume_default.docx 及 resume_default.pdf
 ```
 
 **场景 B：诊断现有经历并按 STAR 法则重塑**
@@ -229,12 +232,13 @@ python main.py interview start --role "后端开发工程师"
 
 ## 🗺️ 开发路线图 (Roadmap)
 
-- [ ] **Phase 1: 核心规范与本地排版引擎**
+- [x] **Phase 1: 核心规范与本地排版引擎**
   - [x] 完成架构分层设计与标准化工程脚手架搭建
   - [x] 迁移至现代化 Python 包管理与依赖锁定（`pyproject.toml` + `uv.lock`）
   - [x] 制定 `config/` 详细字段规范与模板（覆盖本科、硕博科研论文、直博经历与雷达偏好）
   - [x] 完整实现 `core/state.py` Pydantic V2 全系统强类型数据契约（`UserProfile`, `JobPreferences`, `AppSettings`）
-  - [ ] 实现 `skills/resume_generator` 模块（集成 Typst/HTML 模板渲染）
+  - [x] 实现 `core/config.py` 自动化配置加载与强类型校验系统
+  - [x] 实现 `skills/resume_generator` 模块（基于 python-docx 与 Typst 双轨一键输出 Word + PDF）
 - [ ] **Phase 2: LLM 技能接入 (STAR 润色与 JD 匹配)**
   - [ ] 封装 `tools/llm_client.py` 多模型适配层
   - [ ] 编写 `skills/resume_polisher` 诊断评分与重写引擎
