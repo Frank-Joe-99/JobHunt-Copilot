@@ -309,7 +309,70 @@ class AppSettings(BaseModel):
 
 
 # ==============================================================================
-# 兼容别名（支持此前定义的小写类名与常用命名）
+# 4. 简历润色与 ATS 诊断数据契约 (对应 skills/resume_polisher)
+# ==============================================================================
+
+class PolishedItem(BaseModel):
+    """单条经历 STAR 润色结果"""
+    source: str = Field(..., description="经历来源")
+    original: str = Field(..., description="润色前原始描述")
+    polished: str = Field(..., description="STAR 润色后描述")
+    situation_and_task: str = Field("", description="背景与目标")
+    action: str = Field("", description="核心行动")
+    result: str = Field("", description="量化成果")
+    improvement_reason: str = Field("", description="提分亮点")
+
+
+class ResumePolishReport(BaseModel):
+    """整份简历润色综合报告"""
+    summary: str = Field(..., description="总体评述")
+    items: list[PolishedItem] = Field(default_factory=list, description="逐条润色清单")
+
+
+class ATSScoreReport(BaseModel):
+    """ATS 关键词诊断报告"""
+    score: int = Field(..., ge=0, le=100, description="ATS 评分")
+    dimension_scores: dict[str, int] = Field(default_factory=dict, description="各维度得分")
+    matched_keywords: list[str] = Field(default_factory=list, description="命中关键词")
+    missing_keywords: list[str] = Field(default_factory=list, description="缺失关键词")
+    suggestions: list[str] = Field(default_factory=list, description="改进建议")
+
+
+# ==============================================================================
+# 5. 目标岗位 JD 穿透与匹配数据契约 (对应 skills/jd_matcher)
+# ==============================================================================
+
+class JobDescription(BaseModel):
+    """结构化岗位描述"""
+    company: str = Field(..., description="公司名称")
+    role: str = Field(..., description="岗位名称")
+    department: str | None = Field(None, description="部门")
+    hard_requirements: list[str] = Field(default_factory=list, description="硬性技术要求")
+    soft_requirements: list[str] = Field(default_factory=list, description="软技能要求")
+    bonus_items: list[str] = Field(default_factory=list, description="加分项")
+    raw_text: str = Field("", description="JD 原文")
+
+
+class SkillGap(BaseModel):
+    """单项技能比对"""
+    skill: str = Field(..., description="技能名称")
+    status: str = Field(..., description="matched / partial / missing")
+    evidence: str = Field("", description="简历中的佐证")
+    suggestion: str = Field("", description="补强建议")
+
+
+class MatchResult(BaseModel):
+    """岗位匹配分析结果"""
+    score: int = Field(..., ge=0, le=100, description="契合度评分")
+    overview: str = Field(..., description="匹配评述")
+    matched_skills: list[SkillGap] = Field(default_factory=list, description="命中技能")
+    missing_skills: list[SkillGap] = Field(default_factory=list, description="缺失技能")
+    resume_tuning_advice: list[str] = Field(default_factory=list, description="简历调优建议")
+    cover_letter_draft: str = Field("", description="自荐信草稿")
+
+
+# ==============================================================================
+# 兼容别名
 # ==============================================================================
 objective = Objective
 education = Education
@@ -317,3 +380,4 @@ honors_and_awards = HonorAndAward
 certifications = Certification
 UserPreferences = JobPreferences
 SystemSettings = AppSettings
+JDMatchReport = MatchResult

@@ -15,10 +15,10 @@ llm:
   providers:
     deepseek:
       api_key: "sk-your-deepseek-api-key"
-      base_url: "https://api.deepseek.com/v1"
-      model: "deepseek-chat"           # 或 deepseek-reasoner (R1)
-      temperature: 0.3
-      max_tokens: 4096
+      base_url: "https://api.deepseek.com"
+      model: "deepseek-flash"          # DeepSeek-V4.1-Flash
+      temperature: 0.6
+      max_tokens: 40960
       
     openai:
       api_key: "sk-your-openai-api-key"
