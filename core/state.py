@@ -371,6 +371,59 @@ class MatchResult(BaseModel):
     cover_letter_draft: str = Field("", description="自荐信草稿")
 
 
+class ProjectRecommendation(BaseModel):
+    """单个开源项目推荐条目"""
+    repo_name: str                  # 仓库全名 owner/repo
+    repo_url: str                   # GitHub 链接
+    stars: int = 0
+    language: str | None = None     # 主要编程语言
+    languages: str | None = None    # 兼容别名
+    why_recommended: str            # 推荐理由
+    learning_path: str              # 学习路径：重点看哪几个文件/模块
+    interview_tips: str             # 面试考点：可能会追问的问题
+    star_resume_sample: str         # 写进简历的 STAR 模板
+
+
+class ProjectRecommendationReport(BaseModel):
+    """开源实战项目推荐报告"""
+    overview: str = Field(..., description="针对技能缺口的总体学习与提升建议")
+    recommendations: list[ProjectRecommendation] = Field(
+        default_factory=list, description="精选推荐的开源项目列表"
+    )
+
+
+# ==============================================================================
+# 6. 机会雷达批量评估与机会排名契约 (对应 skills/job_radar)
+# ==============================================================================
+
+class RankedOpportunity(BaseModel):
+    """单个岗位的雷达评估与排名条目"""
+    rank: int = Field(..., description="推荐排名序号 (1, 2, 3...)")
+    company: str = Field(..., description="招聘企业")
+    role: str = Field(..., description="目标岗位名称")
+    department: str | None = Field(None, description="部门/业务线")
+    score: int = Field(..., ge=0, le=100, description="综合匹配度得分 (0-100)")
+    tier: str = Field(..., description="机会分层：'优先主投' / '微调冲刺' / '暂缓考虑'")
+    verdict: str = Field(..., description="投递建议策略一句话总结")
+    top_matches: list[str] = Field(default_factory=list, description="核心命中优势技能")
+    key_gaps: list[str] = Field(default_factory=list, description="主要技能缺口")
+    overview: str = Field("", description="岗位匹配综合简评")
+    tuning_advice: list[str] = Field(default_factory=list, description="针对该岗位的简历微调建议")
+
+
+class JobRadarReport(BaseModel):
+    """机会雷达综合诊断与战略报告"""
+    created_at: str = Field(..., description="报告生成时间")
+    total_scanned: int = Field(..., description="本次扫描的岗位总数")
+    opportunities: list[RankedOpportunity] = Field(default_factory=list, description="按得分降序排列的机会列表")
+    common_skill_gaps: list[dict[str, int | str]] = Field(
+        default_factory=list,
+        description="跨岗位高频共性缺口统计 [{'skill': 'Kafka', 'count': 3, 'importance': '高'}]"
+    )
+    strategic_advice: str = Field("", description="求职整体投递优先级与攻坚战略建议")
+    report_file_path: str = Field("", description="导出的 Markdown 报告物理路径")
+
+
 # ==============================================================================
 # 兼容别名
 # ==============================================================================

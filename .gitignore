@@ -25,9 +25,12 @@ share/python-wheels/
 MANIFEST
 
 # ==============================================================================
-# Virtual Environments
+# Virtual Environments & Credentials
+# 虚拟环境、敏感密钥与证书文件
 # ==============================================================================
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
@@ -35,8 +38,19 @@ ENV/
 env.bak/
 venv.bak/
 
+# 证书与私钥
+*.pem
+*.key
+*.cert
+*.cer
+*.crt
+*.pfx
+*.p12
+id_rsa*
+
 # ==============================================================================
-# IDEs & OS Files
+# IDEs, Office & OS Files
+# 编辑器配置、Office 临时锁定文件与操作系统残留
 # ==============================================================================
 .vscode/
 .idea/
@@ -47,42 +61,115 @@ venv.bak/
 Thumbs.db
 desktop.ini
 
+# Microsoft Office 运行时临时锁文件 (如打开 resume_default.docx 时生成的 ~$resume_default.docx)
+~$*
+~$*.docx
+~$*.doc
+~$*.xlsx
+~$*.pptx
+
 # ==============================================================================
 # User Private Profiles & Sensitive Configurations
 # 保障求职者个人隐私：真实个人档案、求职偏好、系统密钥绝不提交至公共仓库
 # ==============================================================================
 config/profile.yaml
 config/profile.yml
+config/profile.json
 config/profile.md
 config/preferences.yaml
 config/preferences.yml
+config/preferences.json
 config/settings.yaml
 config/settings.yml
+config/settings.json
+config/*.local.*
+config/secrets.*
 
-# 用户的真实个人照片、校徽等私人静态文件（保留 .gitkeep）
+# 确保示例配置始终被 Git 追踪
+!config/*.example.*
+
+# 用户的真实个人照片、校徽等私人静态文件（保留 .gitkeep、README 和样例）
 config/assets/*
 !config/assets/.gitkeep
+!config/assets/README.md
 !config/assets/sample_*
 
 # ==============================================================================
-# Storage & Generated Outputs
-# 运行产生的简历成品、数据库、抓取报告与面试录音/文本
+# Storage & Generated Outputs (严格隐私保护)
+# 运行产生的简历成品、目标岗位原始描述、数据库、雷达简报与面试录音/文本
 # ==============================================================================
+# 导出的 Word / PDF 简历
 storage/resumes/*
 !storage/resumes/.gitkeep
+!storage/resumes/README.md
+
+# 机会雷达生成的岗位分析战略简报
 storage/radar_reports/*
 !storage/radar_reports/.gitkeep
+!storage/radar_reports/README.md
+
+# 模拟面试全景录音与问答复盘报告
 storage/interview_logs/*
 !storage/interview_logs/.gitkeep
-storage/*.db
-storage/*.sqlite
-storage/*.sqlite3
+!storage/interview_logs/README.md
+
+# 用户收集与输入的岗位原始 JD（保留样例文件以供体验）
+storage/raw_jds/*
+!storage/raw_jds/.gitkeep
+!storage/raw_jds/README.md
+!storage/raw_jds/sample_*
+!storage/raw_jds/01_*
+!storage/raw_jds/02_*
+!storage/raw_jds/03_*
+
+# 定制求职自荐信与投递导出产物
+storage/cover_letters/*
+!storage/cover_letters/.gitkeep
+!storage/cover_letters/README.md
+storage/exports/*
+!storage/exports/.gitkeep
+!storage/exports/README.md
+
+# 本地 SQLite 投递数据库与锁日志
+storage/*.db*
+storage/*.sqlite*
+storage/**/*.db*
+storage/**/*.sqlite*
+
+# 面试录音音频与视频文件
+storage/**/*.mp3
+storage/**/*.wav
+storage/**/*.m4a
+storage/**/*.mp4
+storage/**/*.webm
+storage/**/*.ogg
+storage/**/*.flac
+storage/**/*.aac
 
 # ==============================================================================
-# Logs & Temporary Files
+# Logs, Caches & Temporary Scratch Files
+# 运行日志、测试/排版临时文件与一次性调试脚本
 # ==============================================================================
 *.log
 logs/
 temp/
 tmp/
 scratch/
+.cache/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+
+# Python 测试与代码检查缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 根目录临时调试与联调脚本（如 test_xxx.py, debug_xxx.py）
+test_*.py
+debug_*.py
