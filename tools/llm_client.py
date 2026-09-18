@@ -1,4 +1,3 @@
-from email.policy import default
 """
 统一大模型客户端 (Unified LLM Client)
 基于 HTTP 标准接口 (兼容 OpenAI 规范) 封装，统一支持 DeepSeek、OpenAI、Claude (通过兼容代理)、Gemini 等多厂商。
@@ -7,23 +6,17 @@ from email.policy import default
 import json
 import re
 import time
-from typing import TypeVar
+from typing import TypeVar, Generator
 import httpx
 from pydantic import BaseModel
 
 from core.config import load_app_settings
 from core.state import LLMProviderConfig
-from core.config import load_app_settings
 
-import httpx
-import json
 T = TypeVar("T", bound=BaseModel)
 
 
 class LLMClient:
-    """
-    初始化客户端。
-    """
     """统一大模型客户端"""
 
     def __init__(self, provider: str | None = None):
@@ -32,7 +25,6 @@ class LLMClient:
 
         Args:
             provider: 指定使用哪个供应商（如 "deepseek"、"openai"）。
-                    不传则自动使用 settings.yaml 中的 default_provider。
                       若不传则自动使用 settings.yaml 中的 default_provider。
         """
         settings = load_app_settings()
@@ -46,7 +38,6 @@ class LLMClient:
 
         self.provider_name = provider_name
         self.config: LLMProviderConfig = settings.llm.providers[provider_name]
-        self.base_url = self._resolve_base_url(provider_name)
         self.base_url: str = self._resolve_base_url(provider_name)
 
     def _resolve_base_url(self, provider_name: str) -> str:
@@ -54,13 +45,12 @@ class LLMClient:
         if self.config.base_url:
             return self.config.base_url.rstrip("/")
 
-        # 常见厂商的默认url：
+        # 常见厂商的默认 URL
         defaults = {
             "deepseek": "https://api.deepseek.com",
             "openai": "https://api.openai.com/v1",
             "moonshot": "https://api.moonshot.cn/v1",
             "kimi": "https://api.moonshot.cn/v1",
-            "openai": "https://api.openai.com/v1",
             "zhipu": "https://open.bigmodel.cn/api/paas/v4",
         }
         return defaults.get(provider_name, "https://api.openai.com/v1")
@@ -189,6 +179,99 @@ class LLMClient:
             raise ValueError(f"Pydantic 反序列化失败：模型返回的不是 JSON 对象: {json_data}")
         return model_class.model_validate(json_data)
 
+    def chat_stream(
+            self, 
+            messages: list[dict], 
+            max_retries: int = 3,
+            timeout: float = 60.0,
+            **kwargs
+            ) -> Generator[str, None, None]:
+        """
+        流式输出大模型生成内容。
+        Args:
+            messages: 消息列表，形如 [{"role": "system", "content": "..."}, ...]
+            max_retries: 最大重试次数 (针对网络超时、429、5xx 错误)
+            timeout: 单次请求超时时间 (秒)
+            **kwargs: 可覆盖 temperature、max_tokens、model 等参数
+        Returns:
+            模型回复的正文文本
+        """
+        # 流式调用LLM
+        url = self._get_endpoint()
+        headers = {
+            "Authorization": f"Bearer {self.config.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload: dict = {
+            "model": kwargs.get("model", self.config.model),
+            "messages": messages,
+            "temperature": kwargs.get("temperature", self.config.temperature),
+            "stream": True,
+        }
+
+        max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
+        if max_tokens:
+            # 安全上限：大部分厂商对单次请求 max_tokens 有上限限制
+            # 如果用户配置了超大值（比如用于上下文长度标记），这里截断为合理请求值
+            payload["max_tokens"] = min(max_tokens, 8192)
+
+        if "response_format" in kwargs:
+            payload["response_format"] = kwargs["response_format"]
+
+        last_err: Exception | None = None
+        for attempt in range(max_retries):
+            try:
+                with httpx.Client(timeout=timeout) as client:
+                    with client.stream("POST", url, headers=headers, json=payload) as response:
+                        if response.status_code == 401:
+                            raise ValueError(
+                                f"[{self.provider_name}] API Key 无效或未授权，请检查 config/settings.yaml"
+                            )
+                        if response.status_code != 200:
+                            err_body = response.read().decode("utf-8", errors="ignore")
+                            raise RuntimeError(
+                                f"[{self.provider_name}] 流式请求失败 ({response.status_code}): {err_body}"
+                            )
+
+                        for line in response.iter_lines():
+                            line = line.strip()
+                            if not line or not line.startswith("data:"):
+                                continue
+
+                            # 剥离 "data:" 前缀
+                            raw_data = line[len("data:"):].strip()
+                            # 判定流结束标记
+                            if raw_data == "[DONE]":
+                                return
+
+                            try:
+                                chunk = json.loads(raw_data)
+                                choices = chunk.get("choices", [])
+                                if choices:
+                                    delta = choices[0].get("delta", {})
+                                    content = delta.get("content")
+                                    if content:
+                                        has_yielded = True
+                                        yield content
+                            except json.JSONDecodeError:
+                                continue
+                return
+
+            except (httpx.TimeoutException, httpx.NetworkError) as e:
+                last_err = e
+                # 如果已经向外部调用者吐过内容，不能再重试（避免内容重复错乱）
+                if has_yielded:
+                    raise RuntimeError(f"[{self.provider_name}] 流式传输过程中断: {e}") from e
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                else:
+                    break
+
+        raise RuntimeError(f"[{self.provider_name}] 流式请求建立失败: {last_err}")
+
+
+    
     # ------------------------------------------------------------------
     # 内部辅助
     # ------------------------------------------------------------------

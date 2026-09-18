@@ -1,3 +1,4 @@
+from enum import Enum
 from pydantic import BaseModel, Field, AliasChoices
 
 
@@ -422,6 +423,65 @@ class JobRadarReport(BaseModel):
     )
     strategic_advice: str = Field("", description="求职整体投递优先级与攻坚战略建议")
     report_file_path: str = Field("", description="导出的 Markdown 报告物理路径")
+
+
+# ==============================================================================
+# 7. 模拟面试模块数据契约 (对应 skills/mock_interviewer)
+# ==============================================================================
+
+class InterviewStage(str, Enum):
+    """面试流程阶段枚举"""
+    INTRO = "intro"                       # 阶段 0：开场破冰与自我介绍
+    RESUME_DEEP_DIVE = "resume_deep_dive" # 阶段 1：简历项目与经历穿透深挖
+    FUNDAMENTALS = "fundamentals"         # 阶段 2：计算机基础与核心八股考点
+    BEHAVIORAL = "behavioral"             # 阶段 3：行为情境与软实力考察
+    REVERSE_QA = "reverse_qa"             # 阶段 4：候选人反问环节
+    COMPLETED = "completed"               # 阶段 5：整场面试已结束
+
+
+class InterviewRole(str, Enum):
+    """面试官角色风格人设枚举"""
+    STRICT_ARCHITECT = "strict_architect" # 严苛型大牛架构师（追问底层、性能瓶颈、边界极限）
+    PRACTICAL_LEAD = "practical_lead"     # 务实型研发主管（关注业务落地、敏捷排错、系统可用性）
+    HRBP = "hrbp"                         # 亲和型 HR 面试官（关注求职动机、团队协作、稳定性与抗压）
+
+
+class InterviewTurn(BaseModel):
+    """单轮问答记录"""
+    turn_id: int = Field(..., description="问答轮次序号 (从 1 开始)")
+    stage: InterviewStage = Field(..., description="所属面试阶段")
+    question: str = Field(..., description="面试官提出的问题")
+    answer: str = Field("", description="候选人的回答内容")
+    feedback: str = Field("", description="针对本轮回答的即时简析或追问提示")
+
+
+class InterviewSession(BaseModel):
+    """模拟面试会话上下文状态载体 (全程记忆容器)"""
+    session_id: str = Field(..., description="会话唯一识别码")
+    role: InterviewRole = Field(default=InterviewRole.STRICT_ARCHITECT, description="当前面试官人设")
+    current_stage: InterviewStage = Field(default=InterviewStage.INTRO, description="当前进行的面试阶段")
+    history: list[InterviewTurn] = Field(default_factory=list, description="完整问答对话历史")
+    target_role: str = Field("后端开发工程师", description="面试目标岗位名称")
+    target_company: str = Field("目标企业", description="面试目标企业名称")
+    is_finished: bool = Field(False, description="整场面试是否已完成")
+
+
+class InterviewEvaluationReport(BaseModel):
+    """面试结束后生成的全维度复盘体检报告"""
+    overall_score: int = Field(..., ge=0, le=100, description="面试综合得分 (0-100)")
+    result: str = Field(..., description="面试结果建议：'建议通过 (Pass)' / '有待商榷 (Weak Pass)' / '暂不匹配 (Reject)'")
+    summary: str = Field(..., description="面试官对整场表现的总体评语")
+    dimension_scores: dict[str, int] = Field(
+        default_factory=dict,
+        description="各维度打分 (如：技术深度、计算机基础、逻辑表达、工程素养、应变能力)"
+    )
+    highlights: list[str] = Field(default_factory=list, description="回答非常出彩的高光亮点")
+    weaknesses: list[str] = Field(default_factory=list, description="暴露出的致命失分点或技术硬伤")
+    model_answers: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="针对失分问题的标准满分回答示范 [{'question': '...', 'ideal_answer': '...'}]"
+    )
+    report_file_path: str = Field("", description="保存到本地的 Markdown 复盘报告物理路径")
 
 
 # ==============================================================================
