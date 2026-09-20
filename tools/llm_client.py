@@ -92,7 +92,7 @@ class LLMClient:
 
         payload: dict = {
             "model": kwargs.get("model", self.config.model),
-            "messages": messages,
+            "messages": self._sanitize_messages(messages),
             "temperature": kwargs.get("temperature", self.config.temperature),
             "stream": False,
         }
@@ -205,7 +205,7 @@ class LLMClient:
 
         payload: dict = {
             "model": kwargs.get("model", self.config.model),
-            "messages": messages,
+            "messages": self._sanitize_messages(messages),
             "temperature": kwargs.get("temperature", self.config.temperature),
             "stream": True,
         }
@@ -277,31 +277,54 @@ class LLMClient:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _sanitize_messages(messages: list[dict]) -> list[dict]:
+        """清洗消息中的孤立代理字符 (surrogates) 与编码异常，防止 Windows 管道乱码导致 JSON 序列化崩溃"""
+        cleaned = []
+        for msg in messages:
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                content = content.encode("utf-8", errors="replace").decode("utf-8")
+            cleaned.append({**msg, "content": content})
+        return cleaned
+
+    @staticmethod
     def _extract_json(text: str) -> dict | list:
-        """从模型回复文本中健壮地解析 JSON 数据"""
+        """从模型回复文本中健壮地解析 JSON 数据，支持自动容错与截断修复"""
         cleaned = text.strip()
 
-        # 1. 直接尝试解析
+        # 1. 直接尝试解析 (严格/宽松模式，允许未转义控制字符)
         try:
-            return json.loads(cleaned)
+            return json.loads(cleaned, strict=False)
         except json.JSONDecodeError:
             pass
 
         # 2. 提取 ```json ... ``` 块
         m = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned, re.IGNORECASE)
         if m:
+            block = m.group(1).strip()
             try:
-                return json.loads(m.group(1).strip())
+                return json.loads(block, strict=False)
             except json.JSONDecodeError:
-                pass
+                cleaned = block
 
         # 3. 寻找最外层 { ... } 或 [ ... ]
         for pattern in (r"(\{[\s\S]*\})", r"(\[[\s\S]*\])"):
             m = re.search(pattern, cleaned)
             if m:
+                target = m.group(1)
                 try:
-                    return json.loads(m.group(1))
+                    return json.loads(target, strict=False)
                 except json.JSONDecodeError:
-                    pass
+                    cleaned = target
+                    break
 
-        raise ValueError(f"无法从大模型回复中解析出合法 JSON:\n{text[:500]}")
+        # 4. 使用工业级 JSON 修复器自动修复截断、未闭合大括号或未转义双引号
+        try:
+            from json_repair import repair_json
+            repaired = repair_json(cleaned, return_objects=True)
+            if isinstance(repaired, (dict, list)) and repaired:
+                return repaired
+        except Exception:
+            pass
+
+        raise ValueError(f"无法从大模型回复中解析出合法 JSON:\n{text[:800]}")

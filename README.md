@@ -94,12 +94,26 @@ uv run python -c "from skills.job_radar.handler import run_radar_pipeline; repor
 
 报告将以排版精美的 Markdown 格式保存于 `storage/radar_reports/`，包含岗位综合排行榜、跨岗位共性缺口及逐岗微调指南。
 
+### 场景 F：全真 AI 场景化模拟面试与复盘体检
+
+基于多轮状态机、穿透式追问与真实大厂考官人设，进行全真模拟技术面试，并在交卷后输出多维度全景复盘体检报告：
+
+```bash
+# 启动交互式引导菜单（选择人设与目标岗位）
+uv run run_interview.py
+
+# 或指定大厂与人设参数极速直达
+uv run run_interview.py --role strict_architect --company 字节跳动 --target-role 分布式存储研发工程师
+```
+
+支持多行长文与代码粘贴作答（按两次 Enter 提交），支持 `/next` 跳过当前阶段与 `/finish` 提前交卷。复盘报告将同步以 Markdown 格式持久化存入 `storage/interview_logs/`。
+
 ## 后续计划
 
-- **AI 模拟面试**：基于多轮追问交互状态机的模拟面试官与面试复盘体检报告 (`skills/mock_interviewer`)。
-- **求职投递看板**：本地求职投递生命周期与备忘管理工具 (`skills/application_tracker`)。
-- **MCP 协议服务**：本地 Model Context Protocol 服务实现，支持通过 stdio 对接 Claude Desktop 与 Cursor (`adapters/mcp_server.py`)。
-- **ChatGPT Work 适配**：插件封装与文件交付闭环 (`adapters/chatgpt_work`)。
+- [x] **AI 模拟面试**：基于多轮追问交互状态机的模拟面试官与面试复盘体检报告 (`skills/mock_interviewer` & `run_interview.py`)。
+- [ ] **求职投递看板**：本地求职投递生命周期与备忘管理工具 (`skills/application_tracker`)。
+- [ ] **MCP 协议服务**：本地 Model Context Protocol 服务实现，支持通过 stdio 对接 Claude Desktop 与 Cursor (`adapters/mcp_server.py`)。
+- [ ] **ChatGPT Work 适配**：插件封装与文件交付闭环 (`adapters/chatgpt_work`)。
 
 ## 模块文档索引
 
@@ -113,6 +127,7 @@ uv run python -c "from skills.job_radar.handler import run_radar_pipeline; repor
   - [目标岗位 JD 穿透比对](skills/jd_matcher/README.md)
   - [开源项目推荐与 STAR 转化](skills/project_recommender/README.md)
   - [岗位机会雷达与战略简报](skills/job_radar/README.md)
+  - [AI 场景化模拟面试官](skills/mock_interviewer/README.md)
 - [底层驱动与工具层 (Tools)](tools/README.md)
 - [产物存储与隐私规则 (Storage)](storage/README.md)
 - [外部协议接入规划 (Adapters)](adapters/README.md)

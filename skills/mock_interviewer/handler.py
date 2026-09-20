@@ -148,7 +148,7 @@ def step_interview_stream(
     if profile is None:
         profile = load_user_profile()
 
-    clean_answer = user_answer.strip()
+    clean_answer = user_answer.encode("utf-8", errors="replace").decode("utf-8").strip()
 
     # 1. 登记候选人对上一轮问题的回答
     if session.history and not session.history[-1].answer:
