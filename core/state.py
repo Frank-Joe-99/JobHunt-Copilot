@@ -178,6 +178,11 @@ class UserProfile(BaseModel):
     honors_and_awards: list[HonorAndAward] = Field(default_factory=list, description="所获荣誉与奖项列表（可选）")
     certifications: list[Certification] = Field(default_factory=list, description="资格证书列表（可选）")
 
+    @property
+    def research_experiences(self) -> list[ResearchProject]:
+        """向后兼容属性别名"""
+        return self.research
+
 
 # ==============================================================================
 # 2. 求职意愿与机会雷达配置契约 (对应 config/preferences.yaml)
@@ -286,7 +291,7 @@ class ResumeGenerationConfig(BaseModel):
     简历渲染与排版引擎配置
     """
     engine: str = Field("typst", description="简历编译引擎（typst 或 html）")
-    default_template: str = Field("modern_geek", description="默认模版风格名称")
+    default_template: str = Field("modern", description="默认模版风格名称")
     page_limit: int = Field(1, ge=1, description="强制约束页面数量上限（默认 A4 单页）")
 
 

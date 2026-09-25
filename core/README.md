@@ -52,21 +52,21 @@ skills/resume_generator   skills/resume_polisher    skills/jd_matcher ...
   | :--- | :--- | :--- |
   | `config/profile.yaml` | `UserProfile` | 个人完整档案，流向 `resume_generator`、`resume_polisher`、`mock_interviewer` |
   | `config/preferences.yaml` | `JobPreferences` | 求职意愿与雷达配置，流向 `job_radar`、`jd_matcher` |
-  | `config/settings.yaml` | `AppSettings` | 运行时基础设施配置，流向 `tools/llm_client.py`、`tools/pdf_engine.py` |
+  | `config/settings.yaml` | `AppSettings` | 运行时基础设施配置，流向 `tools/llm_client.py` 等基础设施层 |
 
 - **其他动态业务流转模型**：
   - `JobDescription`：解析后的结构化岗位 JD（企业、岗位、硬性要求、加分项）。
   - `MatchResult`：JD 匹配结果模型（匹配度得分、技能契合点、技能缺口清单）。
   - `SkillGap`：技能差距实体（缺失技术栈、学习建议、关联开源项目推荐）。
-  - `InterviewState`：模拟面试上下文状态机（当前轮次、问题历史、打分项）。
+  - `InterviewSession`：模拟面试上下文状态实体（当前轮次、问题历史、考核阶段）。
   - `ApplicationRecord`：求职投递看板记录实体。
 - **价值**：大模型输出与外部配置均经过严格校验与反序列化，绝不出现格式错乱导致崩溃；任何外部 Harness（Claude Desktop / Cursor）均可通过这些 Schema 了解输入输出要求。
 
 ### 3. `workflow.py`（工作流编排总线）
 - 负责定义复杂的跨技能业务流程。
 - **典型场景调度流水线**：
-  - `one_click_tailor_flow`（一键定制流）：读取 Profile ➡️ 传入目标 JD ➡️ 执行 `jd_matcher` 提取差距 ➡️ 触发 `resume_polisher` 生成针对性简历 ➡️ 调用 `resume_generator` 导出 PDF/Word。
-  - `interview_prep_flow`（面试备战流）：读取针对性简历与 JD ➡️ 触发 `mock_interviewer` 生成该企业专属模拟题库 ➡️ 启动交互状态机。
+  - `tailor_application_flow`（一键定向全套交付流）：读取 Profile ➡️ 传入目标 JD ➡️ 执行 `jd_matcher` 提取差距 ➡️ 触发 `project_recommender` 检索开源练手补强 ➡️ 触发 `resume_polisher` STAR 定向润色 ➡️ 调用 `resume_generator` 编译定制 PDF/Word ➡️ 封装交付战报 ➡️ 自动登记投递看板。
+  - 交互式模拟面试由 `skills/mock_interviewer` 和 `run_interview.py` (CLI: `jobhunt interview`) 进行调度。
 
 ---
 

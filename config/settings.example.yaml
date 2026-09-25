@@ -39,7 +39,7 @@ llm:
 
 resume_generation:
   engine: "typst"                      # 推荐使用 typst，也可以使用 html
-  default_template: "modern_geek"      # 默认模版名称
+  default_template: "modern"           # 默认模版名称
   page_limit: 1                        # 强约束：A4 纸一页之内
 
 github:

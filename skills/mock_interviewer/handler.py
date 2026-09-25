@@ -7,8 +7,10 @@ import time
 from pathlib import Path
 from typing import Generator
 
-from core.config import load_user_profile
+from core.config import load_user_profile, PROJECT_ROOT
 from core.state import (
+    Basics,
+    Education,
     InterviewEvaluationReport,
     InterviewRole,
     InterviewSession,
@@ -24,6 +26,25 @@ from skills.mock_interviewer.prompt import (
 )
 from skills.mock_interviewer.state_machine import InterviewStateMachine
 from tools.llm_client import LLMClient
+
+
+def _resolve_profile(profile: UserProfile | None) -> UserProfile:
+    """获取用户画像，若未提供或配置文件缺失，则安全生成内置默认画像"""
+    if profile is not None:
+        return profile
+    try:
+        return load_user_profile()
+    except Exception:
+        return UserProfile(
+            basics=Basics(
+                name="求职者",
+                birth_year=2002,
+                phone="13800000000",
+                email="candidate@example.com",
+                location="北京",
+            ),
+            education=[Education(school="目标高校", degree="本科", major="计算机科学与技术", start_date="2020", end_date="2024")],
+        )
 
 
 def _build_profile_summary(
@@ -80,8 +101,7 @@ def start_interview(
     """
     初始化面试会话，并返回 (session 实体, 面试官第一句开场白流式生成器)。
     """
-    if profile is None:
-        profile = load_user_profile()
+    profile = _resolve_profile(profile)
 
     # 1. 创建会话实体
     session = InterviewSession(
@@ -119,19 +139,21 @@ def start_interview(
 
     def generate_and_record() -> Generator[str, None, None]:
         full_response = []
-        for chunk in raw_stream:
-            full_response.append(chunk)
-            yield chunk
-
-        q_text = "".join(full_response).strip()
-        session.history.append(
-            InterviewTurn(
-                turn_id=1,
-                stage=InterviewStage.INTRO,
-                question=q_text,
-                answer="",
-            )
-        )
+        try:
+            for chunk in raw_stream:
+                full_response.append(chunk)
+                yield chunk
+        finally:
+            q_text = "".join(full_response).strip()
+            if q_text:
+                session.history.append(
+                    InterviewTurn(
+                        turn_id=1,
+                        stage=InterviewStage.INTRO,
+                        question=q_text,
+                        answer="",
+                    )
+                )
 
     return session, generate_and_record()
 
@@ -145,29 +167,18 @@ def step_interview_stream(
     """
     接收候选人当前回答，驱动状态机推演，流式生成面试官的下一句提问或追问。
     """
-    if profile is None:
-        profile = load_user_profile()
+    profile = _resolve_profile(profile)
 
-    clean_answer = user_answer.encode("utf-8", errors="replace").decode("utf-8").strip()
+    clean_answer = user_answer.strip()
 
-    # 1. 登记候选人对上一轮问题的回答
-    if session.history and not session.history[-1].answer:
-        session.history[-1].answer = clean_answer or "（候选人未作答）"
-    elif not session.history:
-        session.history.append(
-            InterviewTurn(
-                turn_id=1,
-                stage=session.current_stage,
-                question="（开场破冰）",
-                answer=clean_answer or "（候选人未作答）",
-            )
-        )
-
-    # 2. 状态机检查快捷指令与阶段推进
+    # 1. 状态机检查快捷指令与阶段推进
     sm = InterviewStateMachine()
     cmd = sm.handle_command(clean_answer, session=session)
 
+    # 2. 登记候选人对上一轮问题的回答（若为快捷指令则作相应说明，避免污染真实面试问答记录）
     if cmd == "finish":
+        if session.history and not session.history[-1].answer:
+            session.history[-1].answer = "（候选人申请提前结束面试）"
         session.is_finished = True
         session.current_stage = InterviewStage.COMPLETED
         yield "好的，今天的面试到此结束，感谢你的参与。正在为你出具全景复盘体检报告..."
@@ -175,6 +186,8 @@ def step_interview_stream(
 
     is_advancing = False
     if cmd == "next":
+        if session.history and not session.history[-1].answer:
+            session.history[-1].answer = "（候选人申请跳过本环节）"
         # sm.handle_command 内部已调用 advance_stage
         if session.is_finished:
             yield "所有面试环节已完成，感谢你的回答，稍后将生成复盘体检报告。"
@@ -182,7 +195,20 @@ def step_interview_stream(
         yield f"好的，已跳过上一环节，现在进入阶段：【{session.current_stage.value}】。\n"
         is_advancing = True
     else:
-        # 正常回答模式：检查当前阶段问答轮次是否达到上限，决定是否晋级
+        # 常规用户回答
+        if session.history and not session.history[-1].answer:
+            session.history[-1].answer = clean_answer or "（候选人未作答）"
+        elif not session.history:
+            session.history.append(
+                InterviewTurn(
+                    turn_id=1,
+                    stage=session.current_stage,
+                    question="（开场破冰）",
+                    answer=clean_answer or "（候选人未作答）",
+                )
+            )
+
+        # 检查当前阶段问答轮次是否达到上限，决定是否晋级
         if sm.should_advance(session=session):
             sm.advance_stage(session=session)
             is_advancing = True
@@ -233,19 +259,21 @@ def step_interview_stream(
     raw_stream = llm_client.chat_stream(messages=messages)
 
     full_response = []
-    for chunk in raw_stream:
-        full_response.append(chunk)
-        yield chunk
-
-    new_question = "".join(full_response).strip()
-    session.history.append(
-        InterviewTurn(
-            turn_id=len(session.history) + 1,
-            stage=session.current_stage,
-            question=new_question,
-            answer="",
-        )
-    )
+    try:
+        for chunk in raw_stream:
+            full_response.append(chunk)
+            yield chunk
+    finally:
+        new_question = "".join(full_response).strip()
+        if new_question:
+            session.history.append(
+                InterviewTurn(
+                    turn_id=len(session.history) + 1,
+                    stage=session.current_stage,
+                    question=new_question,
+                    answer="",
+                )
+            )
 
 
 def finish_interview(
@@ -295,7 +323,7 @@ def finish_interview(
 
     # 4. 渲染 Markdown 报告
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    report_dir = Path("storage/interview_logs")
+    report_dir = PROJECT_ROOT / "storage" / "interview_logs"
     report_dir.mkdir(parents=True, exist_ok=True)
     file_path = report_dir / f"interview_report_{session.role.value}_{timestamp}.md"
 

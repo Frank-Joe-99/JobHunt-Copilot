@@ -39,6 +39,31 @@ class LLMClient:
         self.provider_name = provider_name
         self.config: LLMProviderConfig = settings.llm.providers[provider_name]
         self.base_url: str = self._resolve_base_url(provider_name)
+        self._client: httpx.Client | None = None
+
+    def _get_client(self, timeout: float = 60.0) -> httpx.Client:
+        """获取或复用持久化 HTTP 客户端，支持 HTTP Keep-Alive 连接池复用"""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.Client(timeout=timeout)
+        return self._client
+
+    def close(self) -> None:
+        """安全关闭底层 HTTP 连接池"""
+        if self._client is not None and not self._client.is_closed:
+            self._client.close()
+            self._client = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def _resolve_base_url(self, provider_name: str) -> str:
         """根据供应商名称推导 API 基础 URL"""
@@ -109,26 +134,26 @@ class LLMClient:
         last_err: Exception | None = None
         for attempt in range(max_retries):
             try:
-                with httpx.Client(timeout=timeout) as client:
-                    response = client.post(url, headers=headers, json=payload)
+                client = self._get_client(timeout=timeout)
+                response = client.post(url, headers=headers, json=payload, timeout=timeout)
 
-                    if response.status_code == 401:
-                        raise ValueError(
-                            f"[{self.provider_name}] API Key 无效或未授权，请检查 config/settings.yaml"
-                        )
-                    if response.status_code == 404:
-                        raise ValueError(
-                            f"[{self.provider_name}] 访问路径错误 ({url})，请检查 base_url 配置"
-                        )
+                if response.status_code == 401:
+                    raise ValueError(
+                        f"[{self.provider_name}] API Key 无效或未授权，请检查 config/settings.yaml"
+                    )
+                if response.status_code == 404:
+                    raise ValueError(
+                        f"[{self.provider_name}] 访问路径错误 ({url})，请检查 base_url 配置"
+                    )
 
-                    response.raise_for_status()
-                    data = response.json()
+                response.raise_for_status()
+                data = response.json()
 
-                    choices = data.get("choices", [])
-                    if not choices:
-                        raise ValueError(f"大模型响应格式异常，未包含 choices: {data}")
+                choices = data.get("choices", [])
+                if not choices:
+                    raise ValueError(f"大模型响应格式异常，未包含 choices: {data}")
 
-                    return choices[0]["message"]["content"]
+                return choices[0]["message"]["content"]
 
             except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as e:
                 last_err = e
@@ -219,11 +244,12 @@ class LLMClient:
         if "response_format" in kwargs:
             payload["response_format"] = kwargs["response_format"]
 
+        has_yielded = False
         last_err: Exception | None = None
         for attempt in range(max_retries):
             try:
-                with httpx.Client(timeout=timeout) as client:
-                    with client.stream("POST", url, headers=headers, json=payload) as response:
+                client = self._get_client(timeout=timeout)
+                with client.stream("POST", url, headers=headers, json=payload, timeout=timeout) as response:
                         if response.status_code == 401:
                             raise ValueError(
                                 f"[{self.provider_name}] API Key 无效或未授权，请检查 config/settings.yaml"

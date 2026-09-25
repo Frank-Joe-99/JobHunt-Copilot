@@ -25,15 +25,65 @@
 
 ---
 
-## 📂 预期内部结构
+## 📂 模块结构与实现现状
 ```text
 skills/resume_polisher/
-├── __init__.py
+├── __init__.py            # 导出 polish_experiences 与 diagnose_ats
 ├── prompt.py              # STAR 润色 Prompt、ATS 打分规范、Few-Shot 优质示例
 ├── handler.py             # 核心逻辑：诊断经历、调用 LLM 润色、生成对比修改报告
 └── README.md
 ```
 
-## 📥 输入与输出契约
-- **输入**：`Project` / `Internship` 实体，或全文经历列表。
-- **输出**：`PolishedExperience`（包含：原始文本、重写后 STAR 文本、修改理由、量化引导提示、预估 ATS 提分）。
+---
+
+## 📥 核心 API 规范
+
+### 1. `polish_experiences(...)`
+```python
+def polish_experiences(
+    profile: UserProfile | None = None,
+    provider: str | None = None,
+) -> ResumePolishReport:
+    """提取 profile 中的所有亮点经历，调用大模型按 STAR 法则重构提炼并输出对比报告"""
+```
+
+### 2. `diagnose_ats(...)`
+```python
+def diagnose_ats(
+    profile: UserProfile | None = None,
+    target_jd_text: str | None = None,
+    provider: str | None = None,
+) -> ATSScoreReport:
+    """针对候选人画像（及可选的目标岗位 JD）进行 ATS 关键词命中与通过率诊断"""
+```
+
+### 核心数据契约：
+- **`ResumePolishReport`**：
+  - `items: list[PolishedItem]`（包含 `original`, `polished`, `reasoning`, `metrics_hint`）
+  - `overall_advice: str`（综合改进建议）
+- **`ATSScoreReport`**：
+  - `score: int`（ATS 预估通过分 0~100）
+  - `matched_keywords: list[str]`（已命中关键词）
+  - `missing_keywords: list[str]`（缺失高频关键词）
+  - `risk_factors: list[str]`（潜在风险点）
+  - `suggestions: list[str]`（针对性改进行动项）
+
+---
+
+## 🚀 极简调用示例
+
+```python
+from skills.resume_polisher import polish_experiences, diagnose_ats
+
+# 1. 执行 STAR 经历润色
+report = polish_experiences()
+print(f"共润色 {len(report.items)} 条核心经历：")
+for item in report.items[:2]:
+    print("【原句】:", item.original)
+    print("【STAR精修】:", item.polished)
+    print("【修改理由】:", item.reasoning)
+
+# 2. 执行 ATS 诊断
+ats = diagnose_ats()
+print(f"ATS 预估评分: {ats.score} / 100")
+```

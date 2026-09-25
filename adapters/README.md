@@ -35,7 +35,7 @@
 
 | Tool 名称 | 功能简介 | 核心参数 |
 | :--- | :--- | :--- |
-| `tool_generate_resume` | 依据本地主档案编译输出高保真 PDF 与 Word 双格式简历 | `template` ("modern"/"minimal"), `output_name` |
+| `tool_generate_resume` | 依据本地主档案编译输出高保真 PDF 与 Word 双格式简历 | `template` ("modern"), `output_name` |
 | `tool_analyze_jd` | 深度穿透分析岗位招聘 JD，比对技能契合度并生成自荐信草稿 | `jd_text`, `provider` |
 | `tool_recommend_projects` | 针对技能短板检索高价值 GitHub 开源项目并给出 STAR 范文 | `skills` (列表), `language`, `provider` |
 | `tool_one_click_tailor` | **【一键全套定向交付】**比对+开源推荐+STAR强化+生成简历+入库 | `jd_text`, `auto_track` (默认 True) |
@@ -78,7 +78,7 @@
 
 ## 🧪 验证与自测
 
-可在终端直接自测 Tools 注册与连通性：
+可在终端直接自测 Tools 注册与连通性（Windows 终端建议携带 -X utf8 避免 Emoji 编码异常）：
 ```bash
-uv run python -c "from adapters.mcp_server import mcp_app; import asyncio; print(asyncio.run(mcp_app.list_tools()))"
+uv run python -X utf8 -c "from adapters.mcp_server import mcp_app; import asyncio; print(asyncio.run(mcp_app.list_tools()))"
 ```

@@ -10,8 +10,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Generator
 
+from core.config import PROJECT_ROOT
+
 # 默认数据库存储路径: storage/tracker.db
-DEFAULT_DB_PATH = Path("storage/tracker.db")
+DEFAULT_DB_PATH = PROJECT_ROOT / "storage" / "tracker.db"
+
+# 记录已完成初始化的数据库路径，避免高频请求重复执行 DDL
+_INITIALIZED_DBS: set[str] = set()
 
 
 def _init_db_schema(conn: sqlite3.Connection) -> None:
@@ -56,11 +61,14 @@ def get_db_connection(db_path: Path | str | None = None) -> Generator[sqlite3.Co
     """
     path = Path(db_path) if db_path else DEFAULT_DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
+    abs_path_str = str(path.resolve())
 
     conn = sqlite3.connect(str(path), timeout=15.0)
     conn.row_factory = sqlite3.Row
     try:
-        _init_db_schema(conn)
+        if abs_path_str not in _INITIALIZED_DBS:
+            _init_db_schema(conn)
+            _INITIALIZED_DBS.add(abs_path_str)
         yield conn
     finally:
         conn.close()

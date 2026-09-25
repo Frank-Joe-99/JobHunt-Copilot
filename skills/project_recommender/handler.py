@@ -66,8 +66,12 @@ def recommend_projects_report(
                 if r.full_name not in seen_names:
                     seen_names.add(r.full_name)
                     candidate_repos.append(r)
-        except Exception:
-            # 单个关键词搜索失败时降级容错，不中断整体流程
+        except Exception as e:
+            # 单个关键词搜索失败时降级容错，记录提示并继续流程
+            if "403" in str(e):
+                print("[!] 提示: GitHub API 触发未认证请求速率限制 (403)，可在 config/settings.yaml 配置 github.token 提升配额。")
+            else:
+                print(f"[!] 警告: 检索开源项目异常 ({search_query_terms}): {e}")
             continue
 
     # 如果有语言限定且结果较少，尝试不限语言兜底搜索一次
@@ -85,7 +89,9 @@ def recommend_projects_report(
                     if r.full_name not in seen_names:
                         seen_names.add(r.full_name)
                         candidate_repos.append(r)
-            except Exception:
+            except Exception as e:
+                if "403" in str(e):
+                    print("[!] 提示: GitHub API 触发未认证请求速率限制 (403)。")
                 continue
 
     if not candidate_repos:

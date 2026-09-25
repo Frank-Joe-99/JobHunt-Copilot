@@ -71,7 +71,14 @@ def add_application(
     today_str = now.strftime("%Y-%m-%d")
     final_apply_date = apply_date or today_str
 
-    status_str = status.value if isinstance(status, ApplicationStatus) else str(status)
+    if isinstance(status, ApplicationStatus):
+        status_str = status.value
+    else:
+        try:
+            status_str = ApplicationStatus(str(status).strip()).value
+        except ValueError:
+            valid_states = [s.value for s in ApplicationStatus]
+            raise ValueError(f"非法的投递状态 '{status}'。可用状态: {valid_states}")
 
     notes_list: list[str] = []
     if note:
@@ -149,15 +156,22 @@ def update_status(
     new_status_str = existing.status.value
 
     if status is not None:
-        target_status_str = status.value if isinstance(status, ApplicationStatus) else str(status)
+        if isinstance(status, ApplicationStatus):
+            target_status_enum = status
+            target_status_str = status.value
+        else:
+            try:
+                target_status_enum = ApplicationStatus(str(status).strip())
+                target_status_str = target_status_enum.value
+            except ValueError:
+                valid_states = [s.value for s in ApplicationStatus]
+                raise ValueError(f"非法的投递状态 '{status}'。可用状态: {valid_states}")
+
         if target_status_str != existing.status.value:
             status_changed = True
             new_status_str = target_status_str
             old_label = existing.status.label
-            try:
-                new_label = ApplicationStatus(target_status_str).label
-            except ValueError:
-                new_label = target_status_str
+            new_label = target_status_enum.label
             updated_notes.append(f"[{now_str}] 阶段变更: {old_label} ➔ {new_label}")
 
     if note:
@@ -234,8 +248,9 @@ def list_applications(
         params.append(status_str)
 
     if keyword:
-        kw_pattern = f"%{keyword.strip()}%"
-        query += " AND (company LIKE ? OR role LIKE ? OR location LIKE ?)"
+        escaped_kw = keyword.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        kw_pattern = f"%{escaped_kw}%"
+        query += " AND (company LIKE ? ESCAPE '\\' OR role LIKE ? ESCAPE '\\' OR location LIKE ? ESCAPE '\\')"
         params.extend([kw_pattern, kw_pattern, kw_pattern])
 
     query += " ORDER BY updated_at DESC LIMIT ?;"

@@ -34,24 +34,18 @@
 
 ---
 
-## 📂 预期内部结构
 ## 📂 模块内部架构
 ```text
 skills/mock_interviewer/
-├── __init__.py
-├── prompt.py              # 面试官性格人设 Prompt、不同轮次出题策略、打分评测体系
-├── state_machine.py       # 多轮状态跳转逻辑与上下文维护
-├── handler.py             # 核心逻辑：推进对话、处理用户语音/文本输入、汇总复盘报告
-├── __init__.py            # 导出 start_interview, step_interview_stream, finish_interview 等
+├── __init__.py            # 导出 start_interview, step_interview_stream, finish_interview
 ├── prompt.py              # 三大人设 Prompt、5 大阶段出题规范、穿透追问机制、复盘评估 Prompt
 ├── state_machine.py       # 状态机控制器：阶段跳转规则、轮次计数、快捷指令拦截 (/next, /finish)
 ├── handler.py             # 业务处理器：组装候选人画像与历史上下文、流式问答推进、复盘报告生成
 └── README.md
 ```
 
-## 📥 输入与输出契约
-- **输入**：`UserProfile` + `JobDescription` + 面试角色设定（如：严苛架构师、亲和 HR）。
-- **输出**：多轮流式对话 + 最终输出的 `InterviewEvaluationReport`（存储至 `storage/interview_logs/`）。
+---
+
 ## 📥 核心 API 规范
 
 ### 1. `start_interview(...)`

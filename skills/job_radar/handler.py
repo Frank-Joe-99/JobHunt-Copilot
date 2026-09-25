@@ -61,32 +61,37 @@ def scan_opportunities(
 
     evaluated: list[tuple[int, RankedOpportunity]] = []
 
-    for raw_text in jd_texts:
+    for idx, raw_text in enumerate(jd_texts, start=1):
         clean_text = raw_text.strip()
         if not clean_text:
             continue
 
-        # 1. 结构化解析 JD
-        parsed_jd = parse_jd(clean_text, provider=provider)
-        # 2. 深度穿透比对
-        match_res = match_profile_with_jd(profile, parsed_jd, provider=provider)
+        try:
+            # 1. 结构化解析 JD
+            parsed_jd = parse_jd(clean_text, provider=provider)
+            # 2. 深度穿透比对
+            match_res = match_profile_with_jd(profile, parsed_jd, provider=provider)
 
-        tier, verdict = _determine_tier_and_verdict(match_res.score)
+            tier, verdict = _determine_tier_and_verdict(match_res.score)
 
-        opp = RankedOpportunity(
-            rank=0,  # 稍后排序后统一赋予排名序号
-            company=parsed_jd.company,
-            role=parsed_jd.role,
-            department=parsed_jd.department,
-            score=match_res.score,
-            tier=tier,
-            verdict=verdict,
-            top_matches=[s.skill for s in match_res.matched_skills[:3]],
-            key_gaps=[s.skill for s in match_res.missing_skills[:3]],
-            overview=match_res.overview,
-            tuning_advice=match_res.resume_tuning_advice,
-        )
-        evaluated.append((match_res.score, opp))
+            opp = RankedOpportunity(
+                rank=0,  # 稍后排序后统一赋予排名序号
+                company=parsed_jd.company,
+                role=parsed_jd.role,
+                department=parsed_jd.department,
+                score=match_res.score,
+                tier=tier,
+                verdict=verdict,
+                top_matches=[s.skill for s in match_res.matched_skills[:3]],
+                key_gaps=[s.skill for s in match_res.missing_skills[:3]],
+                overview=match_res.overview,
+                tuning_advice=match_res.resume_tuning_advice,
+            )
+            evaluated.append((match_res.score, opp))
+        except Exception as e:
+            # 单份 JD 解析失败不阻断整批任务
+            print(f"[!] 警告: 第 {idx} 份岗位描述分析失败，已跳过: {e}")
+            continue
 
     # 按分数从高到低排序
     evaluated.sort(key=lambda item: item[0], reverse=True)
@@ -118,12 +123,19 @@ def scan_from_directory(
     txt_files = sorted(target_dir.glob("*.txt"))
     jd_texts = []
     for f in txt_files:
+        content = ""
         try:
             content = f.read_text(encoding="utf-8")
-            if content.strip():
-                jd_texts.append(content)
+        except UnicodeDecodeError:
+            try:
+                content = f.read_text(encoding="gb18030")
+            except Exception:
+                pass
         except Exception:
-            continue
+            pass
+
+        if content and content.strip():
+            jd_texts.append(content)
 
     return scan_opportunities(jd_texts, profile=profile, provider=provider)
 

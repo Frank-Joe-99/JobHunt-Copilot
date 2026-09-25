@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from core.config import load_user_profile
+from core.config import load_user_profile, PROJECT_ROOT
 from core.state import (
     UserProfile,
     JobDescription,
@@ -25,6 +25,11 @@ from skills.resume_generator.handler import generate_resume
 from skills.application_tracker.handler import add_application
 
 
+def _sanitize_name(name: str, fallback: str) -> str:
+    cleaned = "".join(c for c in name if c.isalnum() or c in ("_", "-"))
+    return cleaned if cleaned else fallback
+
+
 def _resolve_jd_text(jd_input: str | Path) -> str:
     """解析 JD 输入：支持直接传入字符串或本地文件路径"""
     if isinstance(jd_input, Path):
@@ -33,9 +38,13 @@ def _resolve_jd_text(jd_input: str | Path) -> str:
         raise FileNotFoundError(f"指定的 JD 文件不存在: {jd_input}")
 
     if isinstance(jd_input, str):
-        path_candidate = Path(jd_input)
-        if path_candidate.exists() and path_candidate.is_file():
-            return path_candidate.read_text(encoding="utf-8")
+        if "\n" not in jd_input and len(jd_input) < 260:
+            try:
+                path_candidate = Path(jd_input)
+                if path_candidate.is_file():
+                    return path_candidate.read_text(encoding="utf-8")
+            except OSError:
+                pass
         return jd_input
 
     raise ValueError(f"不支持的 JD 输入类型: {type(jd_input)}")
@@ -48,29 +57,13 @@ def _apply_polish_to_profile(profile: UserProfile, polish_report: ResumePolishRe
     """
     polish_map = {item.original.strip(): item.polished.strip() for item in polish_report.items}
 
-    # 替换实习经历中的 highlights
-    for intern in profile.internships:
-        new_highlights = []
-        for h in intern.highlights:
-            h_strip = h.strip()
-            new_highlights.append(polish_map.get(h_strip, h))
-        intern.highlights = new_highlights
+    def _replace_highlights(items):
+        for item in items:
+            item.highlights = [polish_map.get(h.strip(), h) for h in item.highlights]
 
-    # 替换项目经历中的 highlights
-    for proj in profile.projects:
-        new_highlights = []
-        for h in proj.highlights:
-            h_strip = h.strip()
-            new_highlights.append(polish_map.get(h_strip, h))
-        proj.highlights = new_highlights
-
-    # 替换科研经历中的 highlights
-    for research in profile.research_experiences:
-        new_highlights = []
-        for h in research.highlights:
-            h_strip = h.strip()
-            new_highlights.append(polish_map.get(h_strip, h))
-        research.highlights = new_highlights
+    _replace_highlights(profile.internships)
+    _replace_highlights(profile.projects)
+    _replace_highlights(profile.research)
 
 
 def _build_package_markdown(
@@ -258,8 +251,8 @@ def tailor_application_flow(
     # 步骤 4：编译专属双格式简历
     print("[Step 4/5] 正在调用排版引擎编译生成定制版 PDF 与 Word 简历...")
     if not output_name:
-        clean_company = "".join(c for c in parsed_jd.company if c.isalnum() or c in ("_", "-")) or "target"
-        clean_role = "".join(c for c in parsed_jd.role if c.isalnum() or c in ("_", "-")) or "role"
+        clean_company = _sanitize_name(parsed_jd.company, "target")
+        clean_role = _sanitize_name(parsed_jd.role, "role")
         output_name = f"resume_{clean_company}_{clean_role}_tailored"
 
     resume_paths = generate_resume(
@@ -271,12 +264,12 @@ def tailor_application_flow(
 
     # 步骤 5：封装一键定向投递综合战报
     print("[Step 5/5] 正在封装一键定向投递综合战报...")
-    exports_dir = Path("storage/exports")
+    exports_dir = PROJECT_ROOT / "storage" / "exports"
     exports_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp_file = datetime.now().strftime("%Y%m%d_%H%M%S")
-    clean_company = "".join(c for c in parsed_jd.company if c.isalnum() or c in ("_", "-")) or "公司"
-    clean_role = "".join(c for c in parsed_jd.role if c.isalnum() or c in ("_", "-")) or "岗位"
+    clean_company = _sanitize_name(parsed_jd.company, "公司")
+    clean_role = _sanitize_name(parsed_jd.role, "岗位")
     report_filename = f"package_{clean_company}_{clean_role}_{timestamp_file}.md"
     report_path = exports_dir / report_filename
 

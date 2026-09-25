@@ -6,7 +6,7 @@
 
 ## 🌟 核心特色与架构能力
 
-- 📄 **高保真双格式简历生成**：基于 Typst 与 python-docx，一键秒级排版编译 Word (.docx) 和 PDF (.pdf)，视觉考究紧凑，支持现代风与极简风模板。
+- 📄 **高保真双格式简历生成**：基于 Typst 与 python-docx，一键秒级排版编译 Word (.docx) 和 PDF (.pdf)，视觉考究紧凑，原生支持极具科技质感的现代风排版。
 - 🎯 **一键岗位定向全套交付流**：输入目标企业 JD，端到端自动化完成“JD穿透比对 ➔ 开源练手补强 ➔ 经历定向 STAR 强化 ➔ 编译专属定制简历 ➔ 交付综合战报 ➔ 自动入库跟踪”（**严格遵循零污染原则，绝不篡改主档案**）。
 - 🤖 **全真 AI 场景化模拟面试官**：内置三大真实面试官人设（严苛架构师/务实Lead/亲和HRBP），5 大递进面试阶段流转、穿透式追问与全景复盘体检报告（含五维雷达诊断与满分示范）。
 - 📋 **本地私密求职投递看板**：基于原生 SQLite（WAL并发模式），离线跟踪网申、笔试、一面、二面、HR、Offer各阶段流转，提供未来 7 天面试日程提醒与全流程转化漏斗分析（进面率、Offer率）。
@@ -67,8 +67,8 @@ uv run check_config.py
 # 指定本地真实 JD 文件或直接粘贴 JD 文本
 uv run jobhunt tailor storage/raw_jds/01_bytedance_backend.txt
 
-# 自定义输出名称与排版模板
-uv run jobhunt tailor storage/raw_jds/01_bytedance_backend.txt --template minimal -o resume_bytedance
+# 自定义输出文件名
+uv run jobhunt tailor storage/raw_jds/01_bytedance_backend.txt -o resume_bytedance
 ```
 *生成物料包括：专属定制版 PDF 简历、Word 简历、定向自荐信草稿、综合交付战报，并自动登记到求职看板。*
 

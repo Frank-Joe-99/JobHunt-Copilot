@@ -47,7 +47,7 @@ app.add_typer(tracker_app, name="tracker")
 def cmd_tailor(
     jd: str = typer.Argument(..., help="岗位招聘 JD 文本或本地文件路径 (如: storage/raw_jds/01_bytedance_backend.txt)"),
     output_name: Optional[str] = typer.Option(None, "--output-name", "-o", help="输出简历基本文件名（无需后缀）"),
-    template: str = typer.Option("modern", "--template", "-t", help="简历排版模板 (modern / minimal)"),
+    template: str = typer.Option("modern", "--template", "-t", help="简历排版模板 (默认: modern)"),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help="大模型供应商 (如: deepseek/aliyun/custom)"),
     no_github: bool = typer.Option(False, "--no-github", help="跳过 GitHub 开源实战项目检索"),
     no_track: bool = typer.Option(False, "--no-track", help="不自动将本次投递登记到投递看板"),
@@ -102,7 +102,7 @@ def cmd_tailor(
 
 @app.command(name="resume")
 def cmd_resume(
-    template: str = typer.Option("modern", "--template", "-t", help="简历排版视觉模板 (modern / minimal)"),
+    template: str = typer.Option("modern", "--template", "-t", help="简历排版视觉模板 (默认: modern)"),
     output_name: str = typer.Option("resume_default", "--output-name", "-o", help="输出简历基本文件名"),
 ):
     """
