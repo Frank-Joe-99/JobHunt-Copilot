@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "jobhunt-copilot": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "C:\\Users\\11482\\Desktop\\JobHunt-Copilot",
+        "run",
+        "python",
+        "-m",
+        "adapters.mcp_server"
+      ]
+    }
+  }
+}

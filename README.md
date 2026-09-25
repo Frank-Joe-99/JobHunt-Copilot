@@ -1,18 +1,23 @@
-# JobHunt-Copilot
+# 🎯 JobHunt-Copilot
 
-面向应届生与开发者的求职辅助工具。维护一份 YAML 个人档案，用于排版生成双格式简历、STAR 法则重塑经历、深度分析岗位要求、推荐开源练手项目及批量评估求职机会。
+> **面向技术开发者的工业级智能求职辅助外挂与定向交付引擎**。维护一份本地私密 YAML 个人档案，实现双格式高保真简历排版、STAR 经历重塑、岗位 JD 穿透比对、开源练手项目赋能、全真 AI 模拟面试、求职投递看板与 MCP 跨生态协议服务。
 
-## 当前功能
+---
 
-- **简历生成**：基于 Typst 与 python-docx 从个人档案一键生成 Word (.docx) 和 PDF (.pdf)，支持本地纯离线运行，排版严密紧凑。
-- **经历润色**：严格遵循工业界 STAR 法则重构项目与实习经历，提取量化指标，并诊断简历技术关键词与 ATS 得分。
-- **岗位分析**：深度解构目标岗位招聘描述（JD），穿透比对个人技能树与硬性要求，输出一岗一策修改建议与专属自荐信草稿。
-- **项目推荐**：根据岗位分析诊断出的技能短板，自动从 GitHub 检索高星开源项目，提供精确到核心文件的极简速成路径与简历 STAR 范文。
-- **机会雷达**：支持多岗位 JD 批量扫描（支持文本列表或本地文件夹），自动对标打分、梯队排序（主投/冲刺/暂缓），统计跨岗位高频共性短板，并导出 Markdown 战略简报。
+## 🌟 核心特色与架构能力
 
-> **隐私说明**：除本地简历生成外，经历润色、岗位分析、项目推荐与机会雷达调用大模型 API。个人真实档案、照片、真实岗位 JD 与导出报告已全部通过 `.gitignore` 严格本地隔离，绝不会意外提交至代码仓库。
+- 📄 **高保真双格式简历生成**：基于 Typst 与 python-docx，一键秒级排版编译 Word (.docx) 和 PDF (.pdf)，视觉考究紧凑，支持现代风与极简风模板。
+- 🎯 **一键岗位定向全套交付流**：输入目标企业 JD，端到端自动化完成“JD穿透比对 ➔ 开源练手补强 ➔ 经历定向 STAR 强化 ➔ 编译专属定制简历 ➔ 交付综合战报 ➔ 自动入库跟踪”（**严格遵循零污染原则，绝不篡改主档案**）。
+- 🤖 **全真 AI 场景化模拟面试官**：内置三大真实面试官人设（严苛架构师/务实Lead/亲和HRBP），5 大递进面试阶段流转、穿透式追问与全景复盘体检报告（含五维雷达诊断与满分示范）。
+- 📋 **本地私密求职投递看板**：基于原生 SQLite（WAL并发模式），离线跟踪网申、笔试、一面、二面、HR、Offer各阶段流转，提供未来 7 天面试日程提醒与全流程转化漏斗分析（进面率、Offer率）。
+- 📡 **全网/批量机会雷达**：批量扫描岗位 JD，按人岗契合度智能降序排名、梯队分类（主投/冲刺/暂缓），自动统计跨岗位共性短板并导出战略决策简报。
+- 🔌 **Model Context Protocol (MCP) 协议服务**：基于官方 MCP 协议标准搭建，7 大核心 Tools 即插即用，无缝连接 Claude Desktop、Cursor IDE、VS Code 等主流宿主。
 
-## 快速开始
+> 🔒 **隐私至上原则**：除调用大模型 API 分析与 GitHub 检索外，所有数据（个人真实档案、简历文件、本地投递数据库 `storage/tracker.db`、面试记录）全部离线私密落盘，已通过 `.gitignore` 严格本地隔离，绝无云端泄露风险。
+
+---
+
+## ⚡ 快速开始
 
 ### 1. 环境准备
 
@@ -22,11 +27,12 @@
 git clone https://github.com/Frank-Joe-99/JobHunt-Copilot.git
 cd JobHunt-Copilot
 uv sync
+uv pip install -e .
 ```
 
 ### 2. 准备配置
 
-首次使用时复制示例文件；已有配置时跳过对应文件，避免覆盖：
+首次使用时复制示例文件；已有配置时跳过对应文件：
 
 ```bash
 cp config/profile.example.yaml config/profile.yaml
@@ -36,101 +42,134 @@ cp config/settings.example.yaml config/settings.yaml
 
 | 配置文件 | 用途说明 |
 | --- | --- |
-| `config/profile.yaml` | 教育背景、技能、实习、项目等个人经历；生成简历与对标分析必需 |
-| `config/preferences.yaml` | 目标岗位、城市、薪资等求职偏好与雷达阈值配置 |
-| `config/settings.yaml` | 模型供应商（DeepSeek / OpenAI 等）、API Key 与运行参数 |
+| `config/profile.yaml` | 教育背景、技能、实习、项目等个人核心经历（主档案） |
+| `config/preferences.yaml` | 目标岗位、期望城市、薪资等求职偏好与雷达阈值配置 |
+| `config/settings.yaml` | 大模型供应商（DeepSeek / OpenAI / 阿里百炼等）、API Key 与参数 |
 
-可选个人照片和校徽可放置于 `config/assets/` 并在档案中指定路径。详见 [配置与字段文档](config/README.md)。
+*可选个人证件照和校徽可放置于 `config/assets/` 并在档案中指定路径。详见 [配置与字段文档](config/README.md)。*
 
-### 3. 一键检查配置
+### 3. 一键校验配置
 
 ```bash
 uv run check_config.py
 ```
+*验证三份 YAML 配置文件能否正确解析并通过 Pydantic 强类型校验（不产生模型 API 费用）。*
 
-验证三份 YAML 配置文件能否正确解析并通过 Pydantic 强类型校验（不产生模型 API 费用）。
+---
 
-## 常用功能使用
+## 🚀 统一终端命令体验 (`jobhunt` / `uv run main.py`)
 
-### ① 一键导出 Word + PDF 双格式简历
+系统提供一站式命令行网关，无需记忆零碎脚本：
 
+### ① 一键岗位定向全套交付 (`jobhunt tailor`)
+针对特定企业岗位进行定向定制，生成专属双格式简历并自动建档：
 ```bash
-uv run generate_resume.py
+# 指定本地真实 JD 文件或直接粘贴 JD 文本
+uv run jobhunt tailor storage/raw_jds/01_bytedance_backend.txt
+
+# 自定义输出名称与排版模板
+uv run jobhunt tailor storage/raw_jds/01_bytedance_backend.txt --template minimal -o resume_bytedance
+```
+*生成物料包括：专属定制版 PDF 简历、Word 简历、定向自荐信草稿、综合交付战报，并自动登记到求职看板。*
+
+### ② 全真 AI 场景化模拟面试 (`jobhunt interview`)
+沉浸式多轮技术演练，支持双回车换行长答案提交与打字机流式输出：
+```bash
+# 交互式菜单引导（自主选择考官人设与目标企业岗位）
+uv run jobhunt interview
+
+# 或直达严苛架构师人设
+uv run jobhunt interview --role strict_architect --company 字节跳动 --target-role 分布式存储研发工程师
+```
+*交卷后自动在终端输出五维成绩单仪表盘，并导出全景体检 Markdown 报告至 `storage/interview_logs/`。*
+
+### ③ 求职投递看板与日程管理 (`jobhunt tracker`)
+离线私密管理求职全流程与面试日程：
+```bash
+# 查看求职全景转化漏斗、近期待办面试与投递跟踪清单
+uv run jobhunt tracker
+
+# 手动登记新的投递记录
+uv run jobhunt tracker add --company "腾讯" --role "微信后台研发" --status applied --location "深圳" --note "官网校招投递"
+
+# 推进阶段并预约面试日程
+uv run jobhunt tracker update 1 --status interview_1 --schedule "2026-09-28 14:00" --notes "腾讯会议 123-456-789" --note "收到技术一面邀约"
+
+# 查看未来 7 天内待办笔试/面试日程及倒计时
+uv run jobhunt tracker schedules --days 7
 ```
 
-产物将输出至：
-- `storage/resumes/resume_default.docx`
-- `storage/resumes/resume_default.pdf`
-
-### ② 经历 STAR 润色与 ATS 诊断
-
+### ④ 机会雷达批量扫描 (`jobhunt radar`)
+批量评估某个目录下的所有岗位 JD，智能输出匹配度排行榜与战略报告：
 ```bash
-# 经历 STAR 深度重塑
-uv run python -c "from skills.resume_polisher.handler import polish_experiences; report = polish_experiences(); print(report.summary)"
-
-# 简历 ATS 关键词与技术深度体检
-uv run python -c "from skills.resume_polisher.handler import diagnose_ats; ats = diagnose_ats(); print(f'ATS 得分: {ats.score} 分 | 命中关键词: {len(ats.matched_keywords)} 个')"
+uv run jobhunt radar --dir storage/raw_jds
 ```
 
-### ③ 目标岗位 JD 穿透与定制分析
-
+### ⑤ 基础简历极速编译 (`jobhunt resume`)
+基于主档案秒级编译最新的基础简历：
 ```bash
-uv run python -c "from skills.jd_matcher.handler import analyze_jd; res = analyze_jd('公司：字节跳动\n职位：后端开发\n要求：熟悉 Python/Go，深入理解 Redis/MySQL 高并发'); print(f'契合度: {res.score} 分\n自荐信草稿:\n{res.cover_letter_draft}')"
+uv run jobhunt resume --template modern
 ```
 
-### ④ 开源项目练手推荐（补齐短板）
-
+### ⑥ 启动 MCP 协议服务端 (`jobhunt mcp`)
+以标准 stdio 运行 Model Context Protocol 服务端，与外部 AI 助手无缝互联：
 ```bash
-uv run python -c "from core.state import SkillGap; from skills.project_recommender.handler import recommend_projects; recs = recommend_projects([SkillGap(skill='分布式缓存 Redis', status='missing', suggestion='了解多级缓存')]); [print(f'[{r.repo_name}] {r.stars}★: {r.why_recommended[:50]}...') for r in recs]"
+uv run jobhunt mcp
 ```
 
-### ⑤ 机会雷达批量扫描与战略简报
+---
 
-将意向岗位的 JD 文本以 `.txt` 格式放入 `storage/raw_jds/`，执行：
+## 🔌 接入 Claude Desktop / Cursor (MCP 协议)
 
-```bash
-uv run python -c "from skills.job_radar.handler import run_radar_pipeline; report = run_radar_pipeline(); print(f'扫描完成，共评估 {report.total_scanned} 个岗位，战略报告已生成：{report.report_file_path}')"
+可在任何主流 AI 工具中以自然语言直接调度本系统的所有工具能力：
+
+### 1. Claude Desktop 配置
+在 `claude_desktop_config.json` 中配置：
+```json
+{
+  "mcpServers": {
+    "jobhunt-copilot": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "C:\\Users\\11482\\Desktop\\JobHunt-Copilot",
+        "run",
+        "python",
+        "-m",
+        "adapters.mcp_server"
+      ]
+    }
+  }
+}
 ```
 
-报告将以排版精美的 Markdown 格式保存于 `storage/radar_reports/`，包含岗位综合排行榜、跨岗位共性缺口及逐岗微调指南。
+### 2. Cursor IDE 配置
+在 Cursor **Settings ➔ Features ➔ MCP** 中点击 **Add new MCP server**：
+- **Name**: `jobhunt-copilot`
+- **Type**: `command`
+- **Command**: `uv --directory C:\Users\11482\Desktop\JobHunt-Copilot run python -m adapters.mcp_server`
 
-### 场景 F：全真 AI 场景化模拟面试与复盘体检
+---
 
-基于多轮状态机、穿透式追问与真实大厂考官人设，进行全真模拟技术面试，并在交卷后输出多维度全景复盘体检报告：
-
-```bash
-# 启动交互式引导菜单（选择人设与目标岗位）
-uv run run_interview.py
-
-# 或指定大厂与人设参数极速直达
-uv run run_interview.py --role strict_architect --company 字节跳动 --target-role 分布式存储研发工程师
-```
-
-支持多行长文与代码粘贴作答（按两次 Enter 提交），支持 `/next` 跳过当前阶段与 `/finish` 提前交卷。复盘报告将同步以 Markdown 格式持久化存入 `storage/interview_logs/`。
-
-## 后续计划
-
-- [x] **AI 模拟面试**：基于多轮追问交互状态机的模拟面试官与面试复盘体检报告 (`skills/mock_interviewer` & `run_interview.py`)。
-- [ ] **求职投递看板**：本地求职投递生命周期与备忘管理工具 (`skills/application_tracker`)。
-- [ ] **MCP 协议服务**：本地 Model Context Protocol 服务实现，支持通过 stdio 对接 Claude Desktop 与 Cursor (`adapters/mcp_server.py`)。
-- [ ] **ChatGPT Work 适配**：插件封装与文件交付闭环 (`adapters/chatgpt_work`)。
-
-## 模块文档索引
+## 📂 模块文档索引
 
 各模块的业务细节与技术实现详见对应文档：
 
-- [配置与字段规范](config/README.md)
-- [核心数据模型与配置加载器](core/README.md)
-- [业务技能包总览 (Skills)](skills/README.md)
-  - [简历生成引擎](skills/resume_generator/README.md)
-  - [经历润色与 ATS 诊断](skills/resume_polisher/README.md)
-  - [目标岗位 JD 穿透比对](skills/jd_matcher/README.md)
-  - [开源项目推荐与 STAR 转化](skills/project_recommender/README.md)
-  - [岗位机会雷达与战略简报](skills/job_radar/README.md)
-  - [AI 场景化模拟面试官](skills/mock_interviewer/README.md)
-- [底层驱动与工具层 (Tools)](tools/README.md)
-- [产物存储与隐私规则 (Storage)](storage/README.md)
-- [外部协议接入规划 (Adapters)](adapters/README.md)
+- ⚙️ [配置与字段规范 (Config)](config/README.md)
+- 🧠 [核心数据状态模型与业务流 (Core)](core/README.md)
+- 🧰 [业务技能包总览 (Skills)](skills/README.md)
+  - 📄 [简历排版编译引擎](skills/resume_generator/README.md)
+  - 💎 [经历 STAR 润色与 ATS 诊断](skills/resume_polisher/README.md)
+  - 🎯 [目标岗位 JD 穿透比对](skills/jd_matcher/README.md)
+  - 🚀 [开源项目推荐与 STAR 转化](skills/project_recommender/README.md)
+  - 📡 [岗位机会雷达与战略简报](skills/job_radar/README.md)
+  - 🤖 [全真 AI 场景化模拟面试官](skills/mock_interviewer/README.md)
+  - 📋 [求职投递看板与时间线日程](skills/application_tracker/README.md)
+- 🔧 [底层驱动与工具层 (Tools)](tools/README.md)
+- 💾 [产物存储与隐私隔离 (Storage)](storage/README.md)
+- 🔌 [跨生态协议适配层 (Adapters)](adapters/README.md)
+
+---
 
 ## 许可证
 

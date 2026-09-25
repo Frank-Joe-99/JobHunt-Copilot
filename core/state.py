@@ -485,6 +485,110 @@ class InterviewEvaluationReport(BaseModel):
 
 
 # ==============================================================================
+# 8. 岗位定向全套交付数据契约 (对应 core/workflow.py)
+# ==============================================================================
+
+class TailoredApplicationPackage(BaseModel):
+    """一键岗位定向全套求职物料交付包 (工作流聚合产物)"""
+    target_company: str = Field(..., description="目标企业名称")
+    target_role: str = Field(..., description="目标岗位名称")
+    job_description: JobDescription = Field(..., description="结构化目标岗位描述")
+    match_result: MatchResult = Field(..., description="岗位深度匹配与差距分析结果")
+    project_recommendations: ProjectRecommendationReport | None = Field(
+        None, description="针对技能缺口的开源实战项目推荐报告"
+    )
+    tailored_experiences_summary: str = Field(
+        "", description="针对该岗位定向强化的经历要点概述"
+    )
+    resume_files: dict[str, str] = Field(
+        default_factory=dict,
+        description="生成的定制版 Word/PDF 简历物理路径字典 {'pdf': '...', 'docx': '...'}"
+    )
+    package_report_path: str = Field(
+        "", description="保存到本地的 Markdown 综合交付战报物理路径"
+    )
+
+
+# ==============================================================================
+# 9. 求职投递追踪与日程漏斗数据契约 (对应 skills/application_tracker/)
+# ==============================================================================
+
+class ApplicationStatus(str, Enum):
+    """求职投递生命周期状态枚举"""
+    WISHLIST = "wishlist"          # 意向备选
+    APPLIED = "applied"            # 已网申 / 已投递
+    ASSESSMENT = "assessment"      # 在线笔试 / 测评
+    INTERVIEW_1 = "interview_1"    # 初试 / 技术一面
+    INTERVIEW_2 = "interview_2"    # 复试 / 技术二面/终面
+    HR_STAGE = "hr_stage"          # HR沟通 / 谈薪
+    OFFER = "offer"                # 获得录用 / 意向书
+    REJECTED = "rejected"          # 已终止 / 未通过
+    CLOSED = "closed"              # 主动放弃 / 岗位关闭
+
+    @property
+    def label(self) -> str:
+        """带 Emoji 的可读展示标签"""
+        labels = {
+            self.WISHLIST: "⭐ 意向备选",
+            self.APPLIED: "📨 已网申",
+            self.ASSESSMENT: "📝 笔试测评",
+            self.INTERVIEW_1: "🎯 技术一面",
+            self.INTERVIEW_2: "🔥 技术复试",
+            self.HR_STAGE: "🤝 HR谈薪",
+            self.OFFER: "🎉 录用Offer",
+            self.REJECTED: "❌ 已淘汰",
+            self.CLOSED: "⏹ 已放弃",
+        }
+        return labels.get(self, self.value)
+
+
+class ApplicationRecord(BaseModel):
+    """求职投递记录实体 (SQLite 表映射)"""
+    id: int | None = Field(None, description="自增唯一主键 ID")
+    company: str = Field(..., description="公司名称 (如: 字节跳动)")
+    role: str = Field(..., description="岗位名称 (如: 后端开发工程师)")
+    status: ApplicationStatus = Field(default=ApplicationStatus.APPLIED, description="当前投递阶段")
+    salary_range: str | None = Field(None, description="薪资预期或岗位薪资范围 (如: 25k~35k*16)")
+    location: str | None = Field(None, description="工作地点 (如: 北京/上海)")
+    apply_date: str = Field(..., description="投递日期 (格式: YYYY-MM-DD)")
+    next_schedule_time: str | None = Field(None, description="下一次面试或笔试时间 (如: 2026-09-28 14:00)")
+    next_schedule_notes: str | None = Field(None, description="日程备忘或会议链接 (如: 腾讯会议 123-456-789)")
+    resume_path: str | None = Field(None, description="投递所绑定的定制简历文件绝对路径")
+    notes: list[str] = Field(default_factory=list, description="阶段变迁与面试复盘流水记录")
+    created_at: str = Field("", description="记录创建时间 (ISO/标准时间串)")
+    updated_at: str = Field("", description="最后更新时间")
+
+
+class UpcomingScheduleEvent(BaseModel):
+    """近期待办与日程提醒实体"""
+    record_id: int = Field(..., description="关联的投递记录 ID")
+    company: str = Field(..., description="目标公司")
+    role: str = Field(..., description="目标岗位")
+    status: ApplicationStatus = Field(..., description="当前所处阶段")
+    schedule_time: str = Field(..., description="日程时间串 (YYYY-MM-DD HH:MM)")
+    notes: str = Field("", description="日程备注或会议号")
+    days_left: int = Field(0, description="距离当天的倒计时天数 (0 表示今天，负数表示已超时)")
+
+
+class ApplicationFunnelStats(BaseModel):
+    """求职全流程转化漏斗统计分析"""
+    total_count: int = Field(0, description="记录总数 (含意向备选)")
+    applied_count: int = Field(0, description="正式投递总数 (applied 及之后)")
+    assessment_count: int = Field(0, description="进入笔试测评数")
+    interview_count: int = Field(0, description="进入面试数 (一面/二面/HR)")
+    offer_count: int = Field(0, description="斩获 Offer 数")
+    rejected_count: int = Field(0, description="已挂/淘汰数")
+    active_in_progress: int = Field(0, description="当前仍在进行中的流程数")
+
+    interview_rate: float = Field(0.0, description="进面率 = 面试数 / 正式投递数 * 100%")
+    offer_rate: float = Field(0.0, description="Offer率 = Offer数 / 正式投递数 * 100%")
+    status_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description="各阶段状态数量字典 {'applied': 5, 'interview_1': 2, ...}"
+    )
+
+
+# ==============================================================================
 # 兼容别名
 # ==============================================================================
 objective = Objective
