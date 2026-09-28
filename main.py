@@ -10,6 +10,7 @@ from typing import Optional
 # 确保 Windows 终端 UTF-8 编码
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     try:
         sys.stdin.reconfigure(encoding="utf-8")
     except Exception:
