@@ -38,6 +38,18 @@ class LLMClient:
 
         self.provider_name = provider_name
         self.config: LLMProviderConfig = settings.llm.providers[provider_name]
+        api_key = self.config.api_key.strip()
+        placeholder_key = (
+            not api_key
+            or api_key.startswith("${")
+            or "your-" in api_key.lower()
+            or "replace" in api_key.lower()
+        )
+        if placeholder_key:
+            raise ValueError(
+                f"模型供应商 {provider_name} 尚未配置可用的 API Key。"
+                "请在当前终端设置对应环境变量，或仅在本机编辑 config/settings.yaml。"
+            )
         self.base_url: str = self._resolve_base_url(provider_name)
         self._client: httpx.Client | None = None
 
