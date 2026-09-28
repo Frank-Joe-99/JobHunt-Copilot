@@ -21,6 +21,7 @@ from core.state import (
 from skills.mock_interviewer.prompt import (
     DRILL_DOWN_DIRECTIVE,
     EVALUATION_REPORT_SYSTEM,
+    FACTUALITY_GUARDRAIL,
     INTERVIEWER_PERSONAS,
     STAGE_GUIDELINES,
 )
@@ -58,10 +59,17 @@ def _build_profile_summary(
 
     # 项目经历精炼
     projects_summary = []
-    for p in profile.projects[:3]:
+    for p in profile.projects[:4]:
         hl = "；".join(p.highlights[:2]) if p.highlights else ""
         projects_summary.append(f"- 【{p.name}】（角色：{p.role or '核心开发'}）：{hl}")
     proj_str = "\n".join(projects_summary) if projects_summary else "（暂无具体项目经历）"
+
+    # 科研经历精炼（硕博候选人的核心证据不能被遗漏）
+    research_summary = []
+    for item in profile.research[:3]:
+        hl = "；".join(item.highlights[:2]) if item.highlights else ""
+        research_summary.append(f"- 【{item.name}】（角色：{item.role or '研究成员'}）：{hl}")
+    research_str = "\n".join(research_summary) if research_summary else "（暂无科研经历）"
 
     # 实习经历精炼
     intern_summary = []
@@ -74,7 +82,10 @@ def _build_profile_summary(
     skills_parts = []
     if profile.skills:
         if profile.skills.programming_languages:
-            langs = [pl.name for pl in profile.skills.programming_languages]
+            langs = [
+                f"{pl.name}（{pl.level}{'；' + pl.details if pl.details else ''}）"
+                for pl in profile.skills.programming_languages
+            ]
             skills_parts.append(f"编程语言: {', '.join(langs)}")
         if profile.skills.frameworks_and_tools:
             skills_parts.append(f"框架与工具: {', '.join(profile.skills.frameworks_and_tools)}")
@@ -87,6 +98,7 @@ def _build_profile_summary(
         f"【候选人信息】: {profile.basics.name} ({school} / {degree} / {major})\n"
         f"【核心技能】: {skills_str}\n"
         f"【代表实战项目】:\n{proj_str}\n"
+        f"【代表科研项目】:\n{research_str}\n"
         f"【过往实习经历】:\n{intern_str}"
     )
 
@@ -114,7 +126,7 @@ def start_interview(
 
     # 2. 组装开场白消息
     llm_client = LLMClient(provider=provider)
-    system_prompt = INTERVIEWER_PERSONAS[role]
+    system_prompt = f"{INTERVIEWER_PERSONAS[role]}\n\n{FACTUALITY_GUARDRAIL}"
 
     latest_edu = profile.education[0] if profile.education else None
     school = profile.basics.school or (latest_edu.school if latest_edu else "高校")
@@ -185,6 +197,7 @@ def step_interview_stream(
         return
 
     is_advancing = False
+    is_reverse_qa_response = False
     if cmd == "next":
         if session.history and not session.history[-1].answer:
             session.history[-1].answer = "（候选人申请跳过本环节）"
@@ -210,15 +223,24 @@ def step_interview_stream(
 
         # 检查当前阶段问答轮次是否达到上限，决定是否晋级
         if sm.should_advance(session=session):
-            sm.advance_stage(session=session)
-            is_advancing = True
+            if session.current_stage == InterviewStage.REVERSE_QA:
+                # 先回答候选人的反问，再结束面试；不能直接吞掉反问。
+                is_reverse_qa_response = True
+            else:
+                sm.advance_stage(session=session)
+                is_advancing = True
 
         if session.is_finished:
             yield "所有面试环节已完成，感谢你的回答，稍后将生成复盘体检报告。"
             return
 
     # 3. 构造出题考核指引
-    if is_advancing:
+    if is_reverse_qa_response:
+        directive = (
+            "候选人刚刚提出了反问。请结合目标企业与岗位，以面试官身份给出简短、审慎的回应；"
+            "不得编造公司内部信息。回应后礼貌结束本次面试，不再提出新问题。"
+        )
+    elif is_advancing:
         directive = (
             f"{STAGE_GUIDELINES.get(session.current_stage, '')}\n"
             f"请根据候选人的背景档案与当前表现，直接提出本阶段的第 1 个核心问题（150字以内，保持考官视角，直接说台词，不要带任何括号旁白说明）。"
@@ -233,6 +255,7 @@ def step_interview_stream(
     profile_summary = _build_profile_summary(profile, session.target_company, session.target_role)
     system_prompt = (
         f"{INTERVIEWER_PERSONAS[session.role]}\n\n"
+        f"{FACTUALITY_GUARDRAIL}\n\n"
         f"【候选人背景画像】:\n{profile_summary}\n\n"
         f"【当前面试阶段】: {session.current_stage.value}"
     )
@@ -265,7 +288,11 @@ def step_interview_stream(
             yield chunk
     finally:
         new_question = "".join(full_response).strip()
-        if new_question:
+        if new_question and is_reverse_qa_response:
+            session.history[-1].feedback = new_question
+            session.current_stage = InterviewStage.COMPLETED
+            session.is_finished = True
+        elif new_question:
             session.history.append(
                 InterviewTurn(
                     turn_id=len(session.history) + 1,
@@ -297,6 +324,7 @@ def finish_interview(
             f"【轮次 {turn.turn_id} | 阶段: {turn.stage.value}】\n"
             f"面试官提问: {turn.question}\n"
             f"候选人回答: {ans}"
+            + (f"\n面试官回应: {turn.feedback}" if turn.feedback else "")
         )
     transcript_text = "\n\n".join(history_lines) if history_lines else "（整场无问答交互）"
 
@@ -364,6 +392,7 @@ def finish_interview(
             f"**[Round {turn.turn_id} · {turn.stage.value}]**\n\n"
             f"- **面试官**：{turn.question}\n"
             f"- **候选人**：{ans}\n"
+            + (f"- **面试官回应**：{turn.feedback}\n" if turn.feedback else "")
         )
     transcript_full_str = (
         "\n".join(transcript_md) if transcript_md else "（暂无交互记录）"
