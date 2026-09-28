@@ -12,6 +12,7 @@ from typing import Optional
 # 确保控制台 UTF-8 输入输出正常 (兼容 Windows Terminal)
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     try:
         sys.stdin.reconfigure(encoding="utf-8")
     except Exception:
@@ -321,22 +322,36 @@ def main(
         console.print(f"[yellow]提示：未找到真实 profile.yaml，将使用内置基础画像 ({e})[/yellow]")
         profile = None
 
-    session, stream = start_interview(
-        profile=profile,
-        target_role=selected_target_role,
-        target_company=selected_company,
-        role=selected_role,
-        provider=provider,
-    )
+    try:
+        session, stream = start_interview(
+            profile=profile,
+            target_role=selected_target_role,
+            target_company=selected_company,
+            role=selected_role,
+            provider=provider,
+        )
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        console.print(
+            Panel(
+                f"[bold red]模拟面试暂未启动[/bold red]\n{exc}",
+                title="配置检查",
+                border_style="red",
+            )
+        )
+        raise typer.Exit(code=2) from None
 
     # 打印第一阶段徽章
     render_stage_header(session.current_stage, session.role, selected_company, selected_target_role)
 
     role_color = ROLE_INFO[session.role]["color"]
     console.print(f"[bold {role_color}]🤖 面试官：[/bold {role_color}]", end="")
-    for chunk in stream:
-        console.print(chunk, end="", highlight=False)
-        sys.stdout.flush()
+    try:
+        for chunk in stream:
+            console.print(chunk, end="", highlight=False)
+            sys.stdout.flush()
+    except (ValueError, RuntimeError) as exc:
+        console.print(f"\n[bold red]模型调用失败：[/bold red]{exc}")
+        raise typer.Exit(code=2) from None
     console.print()
 
     # 3. 对话事件主循环 (Turn Loop)
@@ -361,14 +376,22 @@ def main(
             render_stage_header(session.current_stage, session.role, selected_company, selected_target_role)
 
         console.print(f"\n[bold {role_color}]🤖 面试官：[/bold {role_color}]", end="")
-        for chunk in step_stream:
-            console.print(chunk, end="", highlight=False)
-            sys.stdout.flush()
+        try:
+            for chunk in step_stream:
+                console.print(chunk, end="", highlight=False)
+                sys.stdout.flush()
+        except (ValueError, RuntimeError) as exc:
+            console.print(f"\n[bold red]模型调用失败：[/bold red]{exc}")
+            raise typer.Exit(code=2) from None
         console.print()
 
     # 4. 面试结束，调用评估并出具战报
-    with console.status("[bold green]整场问答结束，大模型委员会正在全景复盘并生成体检报告...[/bold green]"):
-        report, file_path = finish_interview(session=session, provider=provider)
+    try:
+        with console.status("[bold green]整场问答结束，大模型委员会正在全景复盘并生成体检报告...[/bold green]"):
+            report, file_path = finish_interview(session=session, provider=provider)
+    except (ValueError, RuntimeError) as exc:
+        console.print(f"[bold red]复盘报告生成失败：[/bold red]{exc}")
+        raise typer.Exit(code=2) from None
 
     # 5. 渲染精要战报仪表盘
     render_debrief_dashboard(report, file_path)
