@@ -1,11 +1,28 @@
 from functools import lru_cache
+import os
 from pathlib import Path
+import re
 from typing import Any
 import yaml
 from core.state import UserProfile, JobPreferences, AppSettings
 
 # project root dir
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_ENV_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def _expand_env_vars(value: Any) -> Any:
+    """递归展开 YAML 中的 ${ENV_VAR}，未设置的变量保持原样。"""
+    if isinstance(value, str):
+        return _ENV_VAR_PATTERN.sub(
+            lambda match: os.environ.get(match.group(1), match.group(0)),
+            value,
+        )
+    if isinstance(value, list):
+        return [_expand_env_vars(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _expand_env_vars(item) for key, item in value.items()}
+    return value
 
 
 @lru_cache(maxsize=16)
@@ -18,7 +35,7 @@ def _read_yaml_file(file_path_str: str) -> dict[str, Any]:
         data = yaml.safe_load(f)
     if data is None:
         raise ValueError(f"配置文件内容为空: {file_path}")
-    return data
+    return _expand_env_vars(data)
 
 
 def load_user_profile(path: Path | None = None) -> UserProfile:
