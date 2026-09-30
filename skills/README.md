@@ -2,6 +2,8 @@
 
 `skills/` 是本系统的**“专家业务顾问群”**。每一个子文件夹对应一个具体的求职业务场景，内部高度内聚了该领域的**行业方法论、专业 Prompt 模板与业务执行逻辑**。
 
+> 此目录中的 `skills.*` 是 Python 业务模块，不是 Codex 可发现的 Skill 文件夹。面向 Codex 的仓库级自然语言工作流位于 [`../.agents/skills/`](../.agents/skills/)；在 Codex 中可用 `$jobhunt-jd-analysis`、`$jobhunt-resume-review`、`$jobhunt-resume-build`、`$jobhunt-project-recommendation`、`$jobhunt-job-radar`、`$jobhunt-mock-interview`、`$jobhunt-application-tracker` 和 `$jobhunt-application-package` 显式调用。每项工作流复用本目录的业务模块或统一 CLI。
+
 ---
 
 ## 📐 单个 Skill 内部规范 (即插即用设计)
