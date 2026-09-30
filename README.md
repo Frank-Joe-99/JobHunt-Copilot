@@ -151,6 +151,21 @@ uv run jobhunt mcp
 
 ---
 
+## 🧩 Codex Skills
+
+仓库级 Codex Skill 位于 [`.agents/skills/`](.agents/skills/)，与下方 `skills/` 中的 Python 业务模块相互配合。Codex 打开本仓库后可按任务自动选用，也可在输入框中显式调用：
+
+- `$jobhunt-jd-analysis`：单个岗位 JD 匹配分析
+- `$jobhunt-resume-review`：简历经历润色与 ATS 诊断
+- `$jobhunt-resume-build`：本地基础简历生成
+- `$jobhunt-project-recommendation`：开源练手项目与技能补短板建议
+- `$jobhunt-job-radar`：批量岗位扫描与排序
+- `$jobhunt-mock-interview`：交互式模拟面试
+- `$jobhunt-application-tracker`：本地投递记录与日程
+- `$jobhunt-application-package`：单岗位定制申请材料
+
+这些 Skill 不携带个人资料或 API 密钥；仍由现有本地配置提供。需要调用模型/GitHub 的流程会把相关候选人经历、JD 或技能缺口发送给所配置的服务；仅在用户要求相应分析时运行。简历、面试记录、雷达报告与投递数据库等本地生成物料保持在 Git 忽略目录中，不应提交。
+
 ## 📂 模块文档索引
 
 各模块的业务细节与技术实现详见对应文档：
