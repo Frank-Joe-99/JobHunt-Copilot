@@ -387,7 +387,7 @@ class ProjectRecommendation(BaseModel):
     why_recommended: str            # 推荐理由
     learning_path: str              # 学习路径：重点看哪几个文件/模块
     interview_tips: str             # 面试考点：可能会追问的问题
-    star_resume_sample: str         # 写进简历的 STAR 模板
+    star_resume_sample: str         # 项目完成后填写的 STAR 模板；不得当作已完成经历或编造指标
 
 
 class ProjectRecommendationReport(BaseModel):
