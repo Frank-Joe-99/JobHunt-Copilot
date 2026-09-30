@@ -9,14 +9,14 @@
   - 承接 `skills/jd_matcher` 计算出的“缺失关键技能清单 (Skill Gaps)”；
   - 调用 `tools/github_client.py` 过滤并检索高契合度的开源练手项目（按 Stars、最近更新、语言、技术栈综合排序）；
   - 借助大模型智能评估，挑选最具实战价值的项目，生成精确到文件的“极简速成路径”；
-  - 提供**“如何将该开源项目转化为简历 STAR 经历”**的标准工业级示例文本，可直接复制进简历。
+  - 提供**项目完成后如何整理真实贡献的 STAR 填写模板**；推荐项目本身不代表候选人已完成，模板不可直接作为已完成经历投递。
 
 ---
 
 ## 🔍 项目推荐与筛选标准
 1. **适中体量**：非 Linux 内核等天文级项目，代码结构清晰，应届生可在 1~2 周内跑通并掌握核心模块。
 2. **工业级技术栈**：深度包含当前互联网工业界高频考点（如：基于 Redis 的轻量队列、基于 Go 的轻量分布式 KV、基于 Python 的语义缓存与 RAG 问答）。
-3. **输出转换模板**：直接教会学生如何在面试官面前讲清楚“你为什么做这个项目、解决了什么问题、学到了什么底层原理”。
+3. **输出转换模板**：在项目实际完成后，帮助学生梳理真实做过的工作、解决的问题与学到的原理；不生成虚构的个人贡献或量化结果。
 
 ---
 
@@ -44,7 +44,7 @@ skills/project_recommender/
   - `why_recommended: str`（推荐理由与业务映射）
   - `learning_path: str`（极简 1~2 周上手步骤）
   - `interview_tips: str`（面试官可能追问的点）
-  - `star_resume_sample: str`（工业级 STAR 简历履历范文）
+- `star_resume_sample: str`（项目完成后填写的 STAR 模板，含事实与指标占位符）
 
 ---
 
@@ -62,6 +62,6 @@ recs = recommend_projects(gaps, language='python')
 for r in recs:
     print(f'[{r.repo_name}] ({r.stars} stars)')
     print('  推荐理由:', r.why_recommended[:60], '...')
-    print('  简历范文:', r.star_resume_sample[:60], '...')
+    print('  完成后填写的简历模板:', r.star_resume_sample[:60], '...')
 "
 ```
