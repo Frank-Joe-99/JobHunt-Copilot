@@ -1,0 +1,8 @@
+interface:
+  display_name: "AI 模拟面试"
+  short_description: "多阶段交互式模拟面试，三种面试官人设，结束后出复盘"
+  default_prompt: "Use $jobhunt-mock-interview to run a mock interview for the role and company I give you."
+
+policy:
+  # 交互式会话且会把档案与对话发送给已配置的 LLM 服务商，仅在用户显式 $ 调用时运行。
+  allow_implicit_invocation: false

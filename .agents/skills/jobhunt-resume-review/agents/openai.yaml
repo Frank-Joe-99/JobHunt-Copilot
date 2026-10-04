@@ -1,0 +1,8 @@
+interface:
+  display_name: "简历润色与 ATS 诊断"
+  short_description: "按 STAR 润色经历并诊断 ATS 关键词覆盖，不编造事实"
+  default_prompt: "Use $jobhunt-resume-review to polish my experience bullets and diagnose ATS keyword coverage for this JD."
+
+policy:
+  # 会把档案与 JD 内容发送给已配置的 LLM 服务商，仅在用户显式 $ 调用时运行。
+  allow_implicit_invocation: false

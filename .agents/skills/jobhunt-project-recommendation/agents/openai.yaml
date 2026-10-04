@@ -1,0 +1,8 @@
+interface:
+  display_name: "开源项目与补短板推荐"
+  short_description: "针对技能缺口检索 GitHub 练手项目并给出学习路径（简历措辞仅为模板）"
+  default_prompt: "Use $jobhunt-project-recommendation to suggest GitHub practice projects and a study path for my skill gaps."
+
+policy:
+  # 会访问 GitHub 并把技能缺口发送给已配置的 LLM 服务商，仅在用户显式 $ 调用时运行。
+  allow_implicit_invocation: false

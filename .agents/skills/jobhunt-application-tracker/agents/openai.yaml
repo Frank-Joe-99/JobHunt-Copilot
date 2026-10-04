@@ -1,0 +1,6 @@
+interface:
+  display_name: "投递看板与日程"
+  short_description: "查看或更新本地投递记录、面试日程与转化漏斗（仅按用户明确指示写入）"
+  default_prompt: "Use $jobhunt-application-tracker to show my application dashboard and upcoming interview schedule."
+
+# 读取为本地操作；写入仅在用户明确要求时发生（见 SKILL.md），保留默认隐式调用。

@@ -166,6 +166,22 @@ uv run jobhunt mcp
 
 这些 Skill 不携带个人资料或 API 密钥；仍由现有本地配置提供。需要调用模型/GitHub 的流程会把相关候选人经历、JD 或技能缺口发送给所配置的服务；仅在用户要求相应分析时运行。简历、面试记录、雷达报告与投递数据库等本地生成物料保持在 Git 忽略目录中，不应提交。
 
+### 使用方式
+1. 用 Codex（CLI 或 IDE 插件）**以本仓库为工作目录**打开，Codex 会扫描 `.agents/skills/` 并读取根目录的 [`AGENTS.md`](AGENTS.md)。
+2. 在输入框键入 `$` 或运行 `/skills` 选择 Skill，例如：
+   > `$jobhunt-jd-analysis 帮我分析下面这个 JD 是否值得投：……`
+3. 在 Codex 中显式调用用的是 `$`，**不是 `@`**（`@` 是 ChatGPT 里选择 Skill 的方式）。
+
+### 隐式调用策略
+每个 Skill 的 `agents/openai.yaml` 声明了 `allow_implicit_invocation`：
+- **仅显式 `$` 调用**（会把档案/JD 发往外部 LLM、访问 GitHub、或写入本地文件）：`jd-analysis`、`resume-review`、`project-recommendation`、`job-radar`、`mock-interview`、`application-package`。
+- **允许 Codex 按任务自动选用**（纯本地）：`resume-build`、`application-tracker`。
+
+### 安装位置
+- **推荐**：直接把本仓库作为 Codex 工作目录（仓库级 Skill，无需额外安装）。
+- 若想在任意目录使用，可把 `.agents/skills/` 下的文件夹复制或软链接到 `~/.agents/skills/`。注意：这些 Skill 的命令均假设在**本仓库根目录**执行 `uv run jobhunt ...`，全局安装后需让 Codex 先切换到本仓库目录，否则命令会找不到项目。
+
+
 ## 📂 模块文档索引
 
 各模块的业务细节与技术实现详见对应文档：

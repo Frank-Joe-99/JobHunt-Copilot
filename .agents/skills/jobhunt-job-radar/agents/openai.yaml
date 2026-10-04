@@ -1,0 +1,8 @@
+interface:
+  display_name: "岗位雷达（批量 JD 排名）"
+  short_description: "扫描指定目录中的多个 JD，按人岗契合度排序并汇总共性缺口"
+  default_prompt: "Use $jobhunt-job-radar to rank the job descriptions in a folder I specify and summarize shared gaps."
+
+policy:
+  # 批量把 JD 与档案内容发送给已配置的 LLM 服务商，仅在用户显式 $ 调用时运行。
+  allow_implicit_invocation: false

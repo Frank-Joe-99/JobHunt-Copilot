@@ -1,0 +1,6 @@
+interface:
+  display_name: "基础简历生成"
+  short_description: "从本地档案编译 PDF/Word 基础简历（纯本地，不调用 LLM）"
+  default_prompt: "Use $jobhunt-resume-build to regenerate my baseline PDF and Word resume from the local profile."
+
+# 纯本地编译、无外发，保留默认的隐式调用。
