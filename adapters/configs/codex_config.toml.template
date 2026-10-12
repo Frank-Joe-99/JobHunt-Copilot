@@ -1,0 +1,17 @@
+# Codex CLI / Desktop Configuration Template
+# 放置路径: ~/.codex/config.toml
+
+[mcp_servers.jobhunt-copilot]
+command = "uv"
+args = [
+    "--directory",
+    "{{PROJECT_ROOT}}",
+    "run",
+    "python",
+    "-X",
+    "utf8",
+    "-m",
+    "adapters.mcp_server",
+]
+startup_timeout_sec = 60
+tool_timeout_sec = 180

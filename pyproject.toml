@@ -21,9 +21,19 @@ dependencies = [
 [project.scripts]
 jobhunt = "main:app"
 
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
 [tool.setuptools.packages.find]
 include = ["core*", "skills*", "adapters*", "tools*"]
 
 [tool.setuptools]
 py-modules = ["main", "run_interview"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
 
