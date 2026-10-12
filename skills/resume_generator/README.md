@@ -1,68 +1,84 @@
-# 📄 skills/resume_generator/：模块 0 本地简历排版引擎
+# 📄 skills/resume_generator/：模块 0 本地双格式简历排版引擎
 
-## 🎯 业务定位与核心价值
-- **双格式输出（Word + PDF 镜像对齐）**：
-  - **Word (.docx)**：基于 `python-docx` 纯代码构建，方便用户在生成后针对具体岗位进行微调、手动增删细节。
-  - **PDF (.pdf)**：基于现代排版新星 **Typst** 引擎编译，毫秒级编译，排版严密对齐、绝对不会跨平台错位。
-  - 两者视觉规格（1cm 边距、1.1 倍行距、三列紧凑头部、论文悬挂缩进）保持 **1:1 绝对一致**。
-- **本地隐私安全 (Local-First)**：
-  - 零云端依赖，无需上传个人信息到第三方网站，彻底杜绝个人隐私泄露。
-  - 结构化输入：严格读取 `core.state.UserProfile` 强类型数据，按需自动隐藏空字段板块。
+> 本模块为 JobHunt-Copilot 的**核心排版编译组件**。基于 Typst 与 python-docx 引擎，以声明式与数据驱动方式一键输出视觉镜像对齐的 Word (.docx) 与 PDF (.pdf) 双格式简历。
 
 ---
 
-## 🏗️ 模块内部架构与文件职责
+## 🎯 业务定位与排版规格
+
+| 格式 | 构建技术底座 | 适用求职场景 | 视觉设计标准 |
+| :--- | :--- | :--- | :--- |
+| **Word (.docx)** | `python-docx` 纯代码构建 | 需二次个性化微调细节的场景 | 1.0cm 紧凑边距、全局 1.1 倍行间距、三列紧凑标题栏、右对齐制表位时间轴、论文悬挂缩进 |
+| **PDF (.pdf)** | `typst` 官方 Python 绑定接口 | 邮件直投、官网网申、打印现场面试 | 与 Word 版保持 1:1 绝对镜像一致排版，中文无缝适配回退链 |
+
+> [!NOTE]
+> **本地编译与隐私安全**：无需云端渲染服务，零外部依赖，毫秒级本地编译，彻底规避简历数据泄漏风险。
+
+---
+
+## 🏗️ 内部组件与文件分工
 
 ```text
 skills/resume_generator/
-├── __init__.py
-├── handler.py              # 统一门面入口：协调 Word + PDF 双引擎，一键双出
-├── docx_builder.py         # Word 构建器：基于 python-docx 渲染 .docx 简历
-├── typst_builder.py        # PDF 构建器：调用 typst Python 绑定编译 .pdf 简历
+├── __init__.py          # 导出 generate_resume 入口
+├── handler.py           # 协调门面：控制临时目录防冲突，并发/原子化生成双格式
+├── docx_builder.py      # Word 渲染器：基于 python-docx 构建 .docx 文件
+├── typst_builder.py     # PDF 渲染器：调用 typst 库执行内存编译
 ├── templates/
-│   └── modern.typ          # 现代精致风 Typst 简历模板（数据驱动排版）
-└── README.md               # 本说明文档
+│   └── modern.typ       # 现代科技风 Typst 简历模板文件
+└── README.md            # 本使用说明
 ```
-
-### 文件职责说明
-1. **`handler.py` (统一门面)**：
-   - 对外暴露主函数 `generate_resume(profile=None, output_name="resume_default", template="modern")`。
-   - 协调调度 Word 与 PDF 两个构建器，将生成产物统一保存至 `storage/resumes/`。
-2. **`docx_builder.py` (Word 构建引擎)**：
-   - 页面规范：A4 纸张、1.0cm 紧凑边距、全局 1.1 倍行间距。
-   - 头部设计：三列无边框表格（左侧姓名与联系方式、中间学校校徽 Logo、右侧个人照片证件照）。
-   - 布局技巧：利用右对齐制表位（Tab Stop）实现“左侧经历名称 + 右侧起止时间”经典简历排版；底边框直接挂载于标题段落消除多余空行；论文发表支持悬挂缩进编号。
-3. **`typst_builder.py` (Typst PDF 编译引擎)**：
-   - 无需本地预装 Typst CLI，直接调用官方 `typst` Python 绑定接口进行内存编译。
-   - 通过 `sys.inputs` / 临时数据桥接机制安全传递数据，支持以项目根目录作为静态资源根路径读取图片。
-4. **`templates/modern.typ` (Typst 模板)**：
-   - 声明式数据驱动排版，完美复刻 Word 的 1cm 边距与三列头部排版。
-   - 具有优雅的间距控制与中文字体适配（Arial + 微软雅黑 + 黑体回退链）。
 
 ---
 
-## 📥 输入与输出契约
+## 🛠️ 操作与生成指南 (Procedures)
 
-- **输入**：`UserProfile` 对象（来自 `core.state`，若不传则通过 `core.config.load_user_profile()` 自动从 `config/profile.yaml` 读取）。
-- **输出**：包含生成产物路径的字典：
-  ```python
-  {
-      "docx": Path("storage/resumes/resume_default.docx"),
-      "pdf": Path("storage/resumes/resume_default.pdf")
-  }
-  ```
+### 1. 前置条件 (Prerequisites)
+- `config/profile.yaml` 存在且格式合法（如未传入内存 Profile，将自动读取该文件）。
+- 输出目录 `storage/resumes/` 将自动创建。
 
 ---
 
-## 🚀 独立调用与验证命令
+### 2. 通过 CLI 命令行生成简历
 
-在项目根目录下通过终端一键生成简历：
-
-```powershell
-# 一键同时生成 Word (.docx) 和 PDF (.pdf) 简历
-uv run python -c "from skills.resume_generator.handler import generate_resume; res = generate_resume(); print('[OK] 生成成功！\nWord:', res['docx'], '\nPDF:', res['pdf'])"
+#### 步骤 1：执行编译命令
+在项目根目录运行下列命令编译基础简历：
+```bash
+# 生成默认 modern 模板简历
+uv run jobhunt resume --template modern -o my_resume_2026
 ```
 
-生成结果将存放在：
-- `storage/resumes/resume_default.docx`
-- `storage/resumes/resume_default.pdf`
+#### 步骤 2：参数说明表
+| 参数名 | 简写 | 必填 | 默认值 | 说明 |
+| :--- | :--- | :---: | :--- | :--- |
+| `--template` | `-t` | 否 | `modern` | 模板风格，支持 `modern`（现代风）或 `minimal`（极简风） |
+| `--output-name` | `-o` | 否 | `resume_default` | 产物文件名称（无需输入 `.pdf` 或 `.docx` 扩展名） |
+
+#### 步骤 3：验证生成产物
+检查输出路径中是否存在双格式文件：
+- PDF 文件：`storage/resumes/my_resume_2026.pdf`
+- Word 文件：`storage/resumes/my_resume_2026.docx`
+
+---
+
+### 3. 通过 Python API 调用生成
+
+#### 步骤 1：导入接口并调用
+```python
+from core.config import load_user_profile
+from skills.resume_generator import generate_resume
+
+# 可选：载入并修改内存中的 Profile 实体
+profile = load_user_profile()
+
+# 执行生成
+result_paths = generate_resume(
+    profile=profile,
+    output_name="custom_resume",
+    template="modern"
+)
+
+print(f"PDF 绝对路径: {result_paths['pdf']}")
+print(f"Word 绝对路径: {result_paths['docx']}")
+```
+*预期结果*：函数返回包含 `"pdf"` 与 `"docx"` 两个 `Path` 对象的字典。

@@ -1,102 +1,139 @@
-# 🔌 adapters/ 目录：多环境与外部生态协议适配层
+# 🔌 adapters/ 目录：跨生态协议适配层
 
-`adapters/` 赋予了 JobHunt-Copilot **“跨生态互操作（Interoperability）”** 的核心能力。它将内部封装好的 `skills/` 和 `core/` 转换成业界通用的协议与标准，使得本工具可以被各种外部主流智能体环境（Claude Desktop、Cursor、VS Code、Codex 等）即插即用。
+> 本模块为 JobHunt-Copilot 提供**外部协议标准化适配能力**。通过标准 Model Context Protocol (MCP) 与 stdio 传输通道，使外部智能体（Claude Desktop、Cursor IDE、VS Code、Codex）能够直接调用求职核心能力。
 
 ---
 
-## 🌐 核心适配架构
+## 🌐 架构与设计原则
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│          External AI Agent Hosts & Desktop Clients          │
-│       (Claude Desktop, Cursor IDE, VS Code, Codex, etc.)    │
+│          外部 AI 宿主客户端 (Host Environments)            │
+│       (Claude Desktop, Cursor IDE, VS Code, Codex)          │
 └──────────────────────────────┬──────────────────────────────┘
-                               │ (Model Context Protocol - stdio JSON-RPC)
+                               │ JSON-RPC 2.0 (stdio 通道)
                                ▼
              ┌────────────────────────────────────┐
              │       adapters/mcp_server.py       │
              │   (Anthropic MCP 2.x 标准服务端)    │
              └──────────────────┬─────────────────┘
-                                │ Dispatch Tools & Resources
+                                │ 调度业务技能与资源
                                 ▼
  ┌─────────────────────────────────────────────────────────────┐
- │                Core Skills & Infrastructure                 │
- │ ├── skills/resume_generator     (极速排版双格式简历)          │
- │ ├── skills/jd_matcher           (JD穿透比对与自荐信)          │
- │ ├── skills/project_recommender  (GitHub 开源项目补短板)       │
- │ ├── skills/resume_polisher      (ATS体检与经历STAR润色)       │
- │ ├── skills/job_radar            (全网/批量岗位雷达简报)        │
- │ ├── skills/mock_interviewer     (AI场景化模拟面试状态机)      │
- │ ├── skills/application_tracker  (投递看板与日程漏斗)          │
- │ └── core/workflow               (一键全套定制交付长任务流)    │
+ │                业务专家技能层 (Skills & Core)                │
+ │ ├── skills/resume_generator     (简历排版编译)             │
+ │ ├── skills/jd_matcher           (JD穿透比对与自荐信)       │
+ │ ├── skills/project_recommender  (开源项目补短板)           │
+ │ ├── skills/resume_polisher      (ATS诊断与STAR润色)        │
+ │ ├── skills/job_radar            (岗位机会雷达扫描)         │
+ │ ├── skills/mock_interviewer     (AI模拟面试状态机)         │
+ │ ├── skills/application_tracker  (投递看板与日程管理)       │
+ │ └── core/workflow               (一键全套定制交付长任务)   │
  └─────────────────────────────────────────────────────────────┘
 ```
 
+### 核心设计规范
+1. **stdio 协议防护**：禁止业务模块向 `stdout` 输出非 JSON-RPC 字符串。所有业务日志必须写入 `stderr`，并在工具执行层配备 `@_mcp_tool_safe` 强制重定向防护。
+2. **长任务非阻塞**：耗时流水线（如 `tool_one_click_tailor`）采用异步线程池与进度回调（`ctx.report_progress`），避免挂起宿主通信事件循环。
+3. **数据隐私隔离**：暴露的 `profile://summary` Resource 自动抹除手机号、邮箱与身份证号等个人敏感字段。
+
 ---
 
-## 🛠️ 暴露的 13 大 MCP 核心工具 (Tools)
+## 🛠️ MCP 工具清单 (Tools Reference)
 
-系统支持带注解（`readOnlyHint`、`openWorldHint`、`destructiveHint`）的丰富工具集，全面覆盖 8 项核心求职能力：
+服务端已注册 13 个强类型工具，支持 `readOnlyHint`、`openWorldHint`、`destructiveHint` 等标准协议注解：
 
-### 1. 简历与岗位深度匹配
-| Tool 名称 | 注解 | 功能简介 | 关键入参 |
+### 1. 简历排版与岗位穿透
+| 工具名称 | 注解属性 | 功能说明 | 关键输入参数 |
 | :--- | :--- | :--- | :--- |
-| `tool_generate_resume` | 本地写入 | 依据本地主档案编译输出高保真 PDF 与 Word 双格式简历 | `template` ("modern"/"minimal"), `output_name` |
-| `tool_analyze_jd` | 只读·外联 | 深度穿透分析岗位招聘 JD，比对技能契合度并生成自荐信草稿 | `jd_text`, `provider` |
-| `tool_recommend_projects` | 只读·外联 | 针对技能短板检索高价值 GitHub 开源项目并给出 STAR 范文 | `skills` (列表), `language`, `provider` |
-| `tool_one_click_tailor` | 写入·长任务 | **【一键全套定向交付】**比对+开源推荐+STAR强化+生成简历+入库（支持 5 步进度实时通知） | `jd_text`, `auto_track` (默认 **False**), `enable_github` (默认 True) |
+| `tool_generate_resume` | 本地写入 | 编译输出 Word (.docx) 与 PDF (.pdf) 双格式简历 | `template` ("modern"/"minimal"), `output_name` |
+| `tool_analyze_jd` | 只读·外部API | 深度解析岗位 JD，计算技术契合度并生成求职自荐信 | `jd_text`, `provider` |
+| `tool_recommend_projects` | 只读·外部API | 检索 GitHub 开源实战项目并生成简历 STAR 范文 | `skills` (列表), `language`, `provider` |
+| `tool_one_click_tailor` | 写入·长任务 | 串联比对、开源补强、STAR优化与简历编译，提供 5 阶段进度 | `jd_text`, `auto_track` (默认 `False`), `enable_github` (默认 `True`) |
 
-### 2. 简历体检与 STAR 润色
-| Tool 名称 | 注解 | 功能简介 | 关键入参 |
+### 2. 简历诊断与重塑
+| 工具名称 | 注解属性 | 功能说明 | 关键输入参数 |
 | :--- | :--- | :--- | :--- |
-| `tool_diagnose_ats` | 只读·外联 | 对本地简历档案进行 ATS 关键词覆盖率、规范性与量化指标深度体检打分 | `target_jd_text` (可选), `provider` |
-| `tool_polish_experiences` | 只读·外联 | 按 STAR 原则重构经历亮点（严守事实底线，严禁捏造虚假指标） | `provider` |
+| `tool_diagnose_ats` | 只读·外部API | 评估简历 ATS 关键词覆盖率、量化指标完整性并打分 | `target_jd_text` (可选), `provider` |
+| `tool_polish_experiences` | 只读·外部API | 基于 STAR 法则优化经历表达（严禁伪造虚假数据） | `provider` |
 
 ### 3. 机会雷达与投递看板
-| Tool 名称 | 注解 | 功能简介 | 关键入参 |
+| 工具名称 | 注解属性 | 功能说明 | 关键输入参数 |
 | :--- | :--- | :--- | :--- |
-| `tool_scan_jds` | 写入·外联 | 批量扫描目录内 JD，生成机会梯队排名与共性短板雷达战略报告（内置越权路径拦截） | `directory` (默认 "storage/raw_jds"), `provider` |
-| `tool_track_application` | 本地写入 | 投递看板管理：登记新投递或推进已有流程状态（枚举校验）/录入面试日程 | `company`, `role`, `status` (枚举), `record_id`, `next_schedule_time` |
-| `tool_get_upcoming_schedules` | 只读 | 查询未来若干天（默认 7 天）以及近期的面试/笔试日程与倒计时 | `days_ahead` (默认 7) |
-| `tool_get_funnel_analytics` | 只读 | 获取当前求职转化漏斗全景统计（网申数、进面数、Offer数及比率） | 无需必填参数 |
+| `tool_scan_jds` | 写入·外部API | 批量评估目录内岗位 JD，生成梯队榜单（含路径防穿越拦截） | `directory` (默认 "storage/raw_jds"), `provider` |
+| `tool_track_application` | 本地写入 | 登记求职申请或推进状态阶段（严格枚举校验） | `company`, `role`, `status` (枚举), `record_id`, `next_schedule_time` |
+| `tool_get_upcoming_schedules` | 只读 | 查询未来 7 天内以及近期待办笔试/面试日程 | `days_ahead` (默认 7) |
+| `tool_get_funnel_analytics` | 只读 | 查询投递总览、进面率、Offer转化率及各阶段分布 | 无需输入参数 |
 
-### 4. 模拟面试状态机交互
-| Tool 名称 | 注解 | 功能简介 | 关键入参 |
+### 4. 场景化模拟面试
+| 工具名称 | 注解属性 | 功能说明 | 关键输入参数 |
 | :--- | :--- | :--- | :--- |
-| `tool_interview_start` | 状态写入 | 初始化模拟面试会话，生成面试官第一句破冰词，返回 `session_id` | `target_company`, `target_role`, `interviewer_role` |
-| `tool_interview_answer` | 状态写入 | 向正在进行的面试提交应答，驱动状态机推演并获得面试官追问/反馈 | `session_id`, `user_answer` (支持 'next'/'finish') |
-| `tool_interview_finish` | 写入·完结 | 终结指定面试，调用大模型生成全维度复盘体检报告并持久化落盘 Markdown | `session_id` |
+| `tool_interview_start` | 状态写入 | 创建模拟面试会话，生成面试官首句开场白，返回 `session_id` | `target_company`, `target_role`, `interviewer_role` |
+| `tool_interview_answer` | 状态写入 | 提交应答，驱动状态机推演并获取面试官追问（支持 `next`/`finish`） | `session_id`, `user_answer` |
+| `tool_interview_finish` | 写入·完结 | 结束面试，生成六维能力复盘报告并持久化为 Markdown 文件 | `session_id` |
 
 ---
 
-## 📦 暴露的 MCP 资源 (Resources)
+## 📦 MCP 资源清单 (Resources Reference)
 
-| URI | 资源名称 | 描述 | MIME 类型 |
+| 资源 URI | 资源名称 | 描述 | MIME 类型 |
 | :--- | :--- | :--- | :--- |
-| `profile://summary` | `candidate_profile_summary` | 本地求职者脱敏个人画像（已移除手机号、邮箱等个人隐私数据） | `application/json` |
+| `profile://summary` | `candidate_profile_summary` | 本地候选人脱敏个人档案（过滤手机号、邮箱等个人敏感隐私） | `application/json` |
 
 ---
 
-## 💻 外部宿主环境接入指南
+## ⚙️ 宿主客户端接入指南 (Host Setup Procedures)
 
-> **提示**：为确保跨平台（尤其是 Windows）下 JSON-RPC 协议不被字符集干扰，启动参数均建议指定 `-X utf8`。
+### 1. 前置条件 (Prerequisites)
+- 项目依赖已安装完整（`uv sync` 已成功执行）。
+- 基础配置已准备就绪（`config/profile.yaml` 与 `config/settings.yaml` 已通过校验）。
 
-### 1. Codex 接入
-通过 Codex CLI 添加 MCP 服务端：
+---
+
+### 2. Codex 客户端接入操作
+
+#### 步骤 1：自动写入配置（推荐）
+在终端中执行下列自动化命令：
 ```bash
-codex mcp add jobhunt-copilot -- uv --directory <仓库绝对路径> run python -X utf8 -m adapters.mcp_server
+uv run python -X utf8 adapters/generate_client_configs.py --install-codex
 ```
-或直接写入 `~/.codex/config.toml`：
+*预期结果*：终端输出 `[+] 成功将 jobhunt-copilot 写入 ~/.codex/config.toml！` 并自动生成备份。
+
+#### 步骤 2：手动写入配置（备选）
+若选择手动配置，向 `~/.codex/config.toml` 中追加下列内容：
 ```toml
 [mcp_servers.jobhunt-copilot]
 command = "uv"
-args = ["--directory", "C:/Users/11482/Desktop/JobHunt-Copilot", "run", "python", "-X", "utf8", "-m", "adapters.mcp_server"]
-tool_timeout_sec = 180  # 建议为长任务设置更宽松的超时时间
+args = [
+    "--directory",
+    "C:/Users/11482/Desktop/JobHunt-Copilot",
+    "run",
+    "python",
+    "-X",
+    "utf8",
+    "-m",
+    "adapters.mcp_server",
+]
+startup_timeout_sec = 60
+tool_timeout_sec = 180
 ```
 
-### 2. Claude Desktop 配置
-在配置文件中添加（Windows: `%APPDATA%\Claude\claude_desktop_config.json`，macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`）：
+#### 步骤 3：验证连通状态
+1. 重新启动 Codex 客户端或新起一个会话窗口。
+2. 在输入框中执行 `/mcp` 命令。
+3. 检查列表中 `jobhunt-copilot` 是否呈现绿色连接状态。
 
+---
+
+### 3. Claude Desktop 接入操作
+
+#### 步骤 1：打开配置文件
+打开对应系统的配置文件：
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+#### 步骤 2：添加服务定义
+在 `mcpServers` 节点下添加 `jobhunt-copilot`：
 ```json
 {
   "mcpServers": {
@@ -117,21 +154,35 @@ tool_timeout_sec = 180  # 建议为长任务设置更宽松的超时时间
 }
 ```
 
-### 3. Cursor IDE 配置
-打开 Cursor **Settings** ➔ **Features** ➔ **MCP** ➔ 点击 **Add new MCP server**：
-- **Name**: `jobhunt-copilot`
-- **Type**: `command`
-- **Command**: `uv --directory C:\Users\11482\Desktop\JobHunt-Copilot run python -X utf8 -m adapters.mcp_server`
+#### 步骤 3：重启并验证
+1. 完全退出并重新启动 Claude Desktop 应用程序。
+2. 在对话界面右下角点击小锤子图标（Tools）。
+3. 验证是否显示 `tool_generate_resume` 等 13 个可用工具。
 
 ---
 
-## 🧪 自动化测试与验证
+### 4. Cursor IDE 接入操作
 
-仓库内置了针对 MCP 协议与业务工具的自动化冒烟与端到端测试脚本：
+#### 步骤 1：打开 MCP 设置界面
+1. 启动 Cursor IDE。
+2. 打开 **Settings**（设置）➔ **Features** ➔ **MCP**。
+
+#### 步骤 2：添加新服务
+点击 **Add new MCP server** 按钮，填写下列信息：
+- **Name**: `jobhunt-copilot`
+- **Type**: `command`
+- **Command**: `uv --directory "C:\Users\11482\Desktop\JobHunt-Copilot" run python -X utf8 -m adapters.mcp_server`
+
+#### 步骤 3：刷新并验证
+点击保存后，等待状态圆点变为绿色，确认服务连接正常。
+
+---
+
+## 🧪 自动化测试验证 (Verification)
+
+在终端执行自动化测试套件验证服务连通性与安全性：
 ```bash
-# 验证 P0/P1 基础协议安全、枚举与日志重定向
-uv run python -X utf8 tmp/verify_p0_p1.py
-
-# 验证 P2/P3 13大工具、脱敏资源与模拟面试生命周期闭环
-uv run python -X utf8 tmp/verify_p2_p3.py
+# 执行全量 MCP 协议与业务工具测试
+uv run pytest tests/test_mcp_protocol.py tests/test_mcp_tools.py -v
 ```
+*预期结果*：8 个测试项全部通过 (`8 passed`)，无超时或管道异常。

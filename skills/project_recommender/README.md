@@ -1,67 +1,79 @@
-# 🚀 skills/project_recommender/：模块 4 技能缺口分析与 GitHub 开源实战推荐
+# 🚀 skills/project_recommender/：模块 4 开源实战推荐与技能补短板
 
-## 🎯 业务定位与解决痛点
-- **解决痛点**：
-  - 应届生如果投递心仪大厂，发现自己的技术栈和项目经历与 JD 存在一定差距（例如缺少 Docker、MQ、分布式经验），但距离秋招/面试还有 1~3 个月准备时间；
-  - 想做项目提升，却不知道去哪找优质、适合应届生练手、且能在面试中讲出亮点的开源项目；
-  - 即使做完了项目，不知道如何将开源实战以专业规范的语言转化为简历上的亮点。
-- **本模块职责**：
-  - 承接 `skills/jd_matcher` 计算出的“缺失关键技能清单 (Skill Gaps)”；
-  - 调用 `tools/github_client.py` 过滤并检索高契合度的开源练手项目（按 Stars、最近更新、语言、技术栈综合排序）；
-  - 借助大模型智能评估，挑选最具实战价值的项目，生成精确到文件的“极简速成路径”；
-  - 提供**项目完成后如何整理真实贡献的 STAR 填写模板**；推荐项目本身不代表候选人已完成，模板不可直接作为已完成经历投递。
+> 本模块为 JobHunt-Copilot 的**技能短板攻坚与开源实战推荐引擎**。针对岗位比对发现的技能缺口，检索 GitHub 高价值开源项目，制定 1-2 周速成路线，并提供项目实际完成后如何梳理亮点的 STAR 简历撰写模板。
 
 ---
 
-## 🔍 项目推荐与筛选标准
-1. **适中体量**：非 Linux 内核等天文级项目，代码结构清晰，应届生可在 1~2 周内跑通并掌握核心模块。
-2. **工业级技术栈**：深度包含当前互联网工业界高频考点（如：基于 Redis 的轻量队列、基于 Go 的轻量分布式 KV、基于 Python 的语义缓存与 RAG 问答）。
-3. **输出转换模板**：在项目实际完成后，帮助学生梳理真实做过的工作、解决的问题与学到的原理；不生成虚构的个人贡献或量化结果。
+## 🎯 业务定位与推荐准则
+
+解决候选人发现技术栈与岗位存在差距后，不知道学什么项目、如何高效上手、如何体现到简历中的痛点。
+
+### 项目筛选原则：
+1. **适中体量**：筛选代码架构清晰、非天文级规模的项目，确保应届生可在 1~2 周内跑通核心代码并掌握关键机制。
+2. **工业级技术栈**：紧扣大厂高频考点（如：分布式锁、消息队列轻量实现、高性能 KV、语义缓存等）。
+3. **真实性提示**：模块生成的简历 STAR 范文为**待完成后的写作参考模板**，严禁将未实际运行或未学习的项目直接作为已完成成果写入简历。
 
 ---
 
-## 📂 模块结构与实现现状
+## 🏗️ 内部组件与核心 API
+
 ```text
 skills/project_recommender/
 ├── __init__.py            # 导出 recommend_projects 与 recommend_projects_report
-├── prompt.py              # PROJECT_EVAL_SYSTEM 评估与 STAR 转化提示词
-├── handler.py             # 核心调度逻辑：核心词提炼 -> GitHub 搜索去重 -> LLM 筛选与 STAR 转化
-└── README.md
+├── prompt.py              # 项目智能筛选与学习路线制定提示词
+├── handler.py             # 核心逻辑：提取关键词 -> GitHub 检索去重 -> LLM 筛选与建议
+└── README.md              # 本说明文档
 ```
 
----
-
-## 📥 输入与输出契约
-- **输入**：`list[SkillGap]`（缺失技能清单） + 主力语言偏好。
-- **输出**：`ProjectRecommendationReport` 或 `list[ProjectRecommendation]`。
-- **主入口函数**：
-  - `recommend_projects(skills_gaps: list[SkillGap], language: str | None = "python", provider: str | None = None) -> list[ProjectRecommendation]`
-  - `recommend_projects_report(skills_gaps: list[SkillGap], language: str | None = "python", provider: str | None = None) -> ProjectRecommendationReport`
-- **输出实体核心字段**：
-  - `repo_name: str`（仓库名）
-  - `repo_url: str`（GitHub 链接）
-  - `stars: int`（Star 数量）
-  - `why_recommended: str`（推荐理由与业务映射）
-  - `learning_path: str`（极简 1~2 周上手步骤）
-  - `interview_tips: str`（面试官可能追问的点）
-- `star_resume_sample: str`（项目完成后填写的 STAR 模板，含事实与指标占位符）
+### 核心接口契约：
+1. **`recommend_projects(skills_gaps: list[SkillGap], language: str | None = "python", provider: str | None = None) -> list[ProjectRecommendation]`**  
+   直接返回精选的开源项目推荐列表。
+2. **`recommend_projects_report(skills_gaps: list[SkillGap], language: str | None = "python", provider: str | None = None) -> ProjectRecommendationReport`**  
+   返回包含整体概述与项目详情的完整报告实体。
 
 ---
 
-## 🚀 独立调用与验证命令
+## 🛠️ 操作与调用指南 (Procedures)
 
-```powershell
-uv run python -c "
+### 1. 前置条件 (Prerequisites)
+- `config/settings.yaml` 中大模型提供商已配置完备。
+- 可选配置 `github.token` 以提升 GitHub API 请求配额。
+
+---
+
+### 2. 执行开源项目推荐操作
+
+#### 步骤 1：构造技能缺口列表
+定义需要补强的短板技能清单（通常由 `jd_matcher` 自动生成）：
+```python
 from core.state import SkillGap
-from skills.project_recommender.handler import recommend_projects
+from skills.project_recommender import recommend_projects_report
+
+# 构造短板列表
 gaps = [
-    SkillGap(skill='分布式缓存 Redis', status='missing', suggestion='建议了解多级缓存设计'),
-    SkillGap(skill='消息队列 Kafka', status='partial', suggestion='建议深化生产者消费者模型'),
+    SkillGap(skill="Redis 分布式缓存", status="missing", suggestion="需补充高并发缓存实战"),
+    SkillGap(skill="Kafka 消息队列", status="missing", suggestion="需掌握削峰填谷模型"),
 ]
-recs = recommend_projects(gaps, language='python')
-for r in recs:
-    print(f'[{r.repo_name}] ({r.stars} stars)')
-    print('  推荐理由:', r.why_recommended[:60], '...')
-    print('  完成后填写的简历模板:', r.star_resume_sample[:60], '...')
-"
 ```
+
+#### 步骤 2：调用推荐接口
+执行推荐流程，可指定主力语言偏好：
+```python
+report = recommend_projects_report(skills_gaps=gaps, language="python")
+```
+
+#### 步骤 3：查看并输出推荐成果
+遍历并输出推荐项目详情：
+```python
+print("推荐综述:", report.overview)
+for idx, item in enumerate(report.recommendations, start=1):
+    print(f"\n【推荐项目 {idx}】{item.repo_name} (⭐ {item.stars})")
+    print(f"  项目链接: {item.repo_url}")
+    print(f"  推荐理由: {item.why_recommended}")
+    print(f"  攻坚路径: {item.learning_path}")
+    print(f"  面试高频考点: {item.interview_tips}")
+    print(f"  待完成后的简历范文:\n  {item.star_resume_sample}")
+```
+*预期结果*：
+- 返回 2~4 个 GitHub 开源项目；
+- 每个项目提供明确的上手步骤与面试考察要点。
