@@ -5,11 +5,14 @@
 
 from collections import Counter
 from datetime import datetime
+import logging
 from pathlib import Path
 
 from core.config import load_user_profile
 from core.state import UserProfile, RankedOpportunity, JobRadarReport
 from skills.jd_matcher.handler import parse_jd, match_profile_with_jd
+
+logger = logging.getLogger(__name__)
 
 # 项目根目录
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -90,7 +93,7 @@ def scan_opportunities(
             evaluated.append((match_res.score, opp))
         except Exception as e:
             # 单份 JD 解析失败不阻断整批任务
-            print(f"[!] 警告: 第 {idx} 份岗位描述分析失败，已跳过: {e}")
+            logger.warning(f"第 {idx} 份岗位描述分析失败，已跳过: {e}")
             continue
 
     # 按分数从高到低排序

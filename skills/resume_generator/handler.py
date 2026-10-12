@@ -1,5 +1,6 @@
 """双格式简历生成入口；在项目根目录运行 python -m skills.resume_generator.handler。"""
 
+import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -7,6 +8,8 @@ from core.config import load_user_profile
 from core.state import UserProfile
 from skills.resume_generator.docx_builder import build_docx
 from skills.resume_generator.typst_builder import build_pdf
+
+logger = logging.getLogger(__name__)
 
 # 默认产物输出目录
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -46,10 +49,10 @@ def generate_resume(
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix=".resume-", dir=OUTPUT_DIR) as temp_dir:
         staging_dir = Path(temp_dir)
-        print("[+] generating PDF resume...")
+        logger.info("generating PDF resume...")
         staged_pdf = build_pdf(profile, staging_dir / pdf_path.name, template=template)
 
-        print("[+] generating Word resume...")
+        logger.info("generating Word resume...")
         staged_docx = build_docx(profile, staging_dir / docx_path.name)
 
         staged_pdf.replace(pdf_path)

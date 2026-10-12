@@ -4,7 +4,11 @@ JobHunt-Copilot Model Context Protocol (MCP) 服务端
 外部 AI 助手可通过调用本服务端暴露的 Tools，直接执行简历生成、JD深度比对、开源推荐、一键定向投递与日程看板管理。
 """
 
+import contextlib
+import functools
+import io
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -13,21 +17,36 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-try:
-    from mcp.server.mcpserver import MCPServer
-    mcp_app = MCPServer(
-        name="jobhunt-copilot",
-        description="JobHunt-Copilot 智能求职赋能套件：简历排版、JD穿透匹配、开源实战项目推荐、一键定向全套交付与投递日程看板。",
-    )
-except ImportError:
-    from mcp.server.fastmcp import FastMCP
-    mcp_app = FastMCP(
-        name="jobhunt-copilot",
-        description="JobHunt-Copilot 智能求职赋能套件",
-    )
+from typing import Literal
+
+from mcp.server.mcpserver import MCPServer
+from mcp.types import ToolAnnotations
+
+APPLICATION_STATUS_VALUES = Literal[
+    "wishlist", "applied", "assessment",
+    "interview_1", "interview_2", "hr_stage",
+    "offer", "rejected", "closed"
+]
+
+logger = logging.getLogger(__name__)
+
+mcp_app = MCPServer(
+    name="jobhunt-copilot",
+    description="JobHunt-Copilot 智能求职赋能套件：简历排版、JD穿透匹配、开源实战项目推荐、一键定向全套交付与投递日程看板。",
+)
 
 
-@mcp_app.tool()
+def _mcp_tool_safe(func):
+    """Decorator: redirect stdout→stderr during tool execution to protect JSON-RPC stdio."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        with contextlib.redirect_stdout(sys.stderr):
+            return func(*args, **kwargs)
+    return wrapper
+
+
+@mcp_app.tool(annotations=ToolAnnotations(readOnlyHint=False, openWorldHint=False))
+@_mcp_tool_safe
 def tool_generate_resume(
     template: str = "modern",
     output_name: str = "resume_default",
@@ -39,24 +58,22 @@ def tool_generate_resume(
         template: 简历视觉主题模板，支持 'modern'（现代专业风）或 'minimal'（极简学术风）
         output_name: 输出文件基本名称（无需后缀）
     """
-    try:
-        from skills.resume_generator import generate_resume
-        paths = generate_resume(template=template, output_name=output_name)
-        return json.dumps(
-            {
-                "status": "success",
-                "message": "双格式简历编译成功！",
-                "pdf_path": str(paths["pdf"].resolve()),
-                "docx_path": str(paths["docx"].resolve()),
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    except Exception as e:
-        return json.dumps({"status": "error", "error": str(e)}, ensure_ascii=False)
+    from skills.resume_generator import generate_resume
+    paths = generate_resume(template=template, output_name=output_name)
+    return json.dumps(
+        {
+            "status": "success",
+            "message": "双格式简历编译成功！",
+            "pdf_path": str(paths["pdf"].resolve()),
+            "docx_path": str(paths["docx"].resolve()),
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
 
 
-@mcp_app.tool()
+@mcp_app.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True))
+@_mcp_tool_safe
 def tool_analyze_jd(
     jd_text: str,
     provider: str | None = None,
@@ -67,34 +84,34 @@ def tool_analyze_jd(
     Args:
         jd_text: 目标岗位的招聘 JD 纯文本或包含岗位要求的描述
         provider: 可选的大模型供应商 (如 deepseek/aliyun/custom)
+
+    ⚠️ 隐私提示：本工具会将 JD 文本与求职者档案摘要发送至外部大模型服务进行分析。
     """
-    try:
-        from skills.jd_matcher import parse_jd, match_profile_with_jd
-        from core.config import load_user_profile
+    from skills.jd_matcher import parse_jd, match_profile_with_jd
+    from core.config import load_user_profile
 
-        profile = load_user_profile()
-        parsed_jd = parse_jd(jd_text, provider=provider)
-        match_result = match_profile_with_jd(profile, parsed_jd, provider=provider)
+    profile = load_user_profile()
+    parsed_jd = parse_jd(jd_text, provider=provider)
+    match_result = match_profile_with_jd(profile, parsed_jd, provider=provider)
 
-        return json.dumps(
-            {
-                "status": "success",
-                "target_company": parsed_jd.company,
-                "target_role": parsed_jd.role,
-                "match_score": match_result.score,
-                "matched_skills": [m.model_dump() for m in match_result.matched_skills],
-                "missing_skills": [g.model_dump() for g in match_result.missing_skills],
-                "tuning_advice": match_result.resume_tuning_advice,
-                "cover_letter_draft": match_result.cover_letter_draft,
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    except Exception as e:
-        return json.dumps({"status": "error", "error": str(e)}, ensure_ascii=False)
+    return json.dumps(
+        {
+            "status": "success",
+            "target_company": parsed_jd.company,
+            "target_role": parsed_jd.role,
+            "match_score": match_result.score,
+            "matched_skills": [m.model_dump() for m in match_result.matched_skills],
+            "missing_skills": [g.model_dump() for g in match_result.missing_skills],
+            "tuning_advice": match_result.resume_tuning_advice,
+            "cover_letter_draft": match_result.cover_letter_draft,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
 
 
-@mcp_app.tool()
+@mcp_app.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True))
+@_mcp_tool_safe
 def tool_recommend_projects(
     skills: list[str],
     language: str = "python",
@@ -107,22 +124,23 @@ def tool_recommend_projects(
         skills: 待攻坚的技能关键词列表，例如 ["Kafka", "Redis"]
         language: 偏好的主语言（默认 python）
         provider: 可选的大模型供应商
+
+    ⚠️ 隐私提示：本工具会调用 GitHub API 检索仓库，并将技能信息发送至外部大模型进行评估。
     """
-    try:
-        from skills.project_recommender import recommend_projects_report
-        from core.state import SkillGap
+    from skills.project_recommender import recommend_projects_report
+    from core.state import SkillGap
 
-        gaps = [SkillGap(skill=s, status="missing", suggestion="需要补充工业级实战经验") for s in skills]
-        report = recommend_projects_report(skills_gaps=gaps, language=language, provider=provider)
-        return report.model_dump_json(indent=2)
-    except Exception as e:
-        return json.dumps({"status": "error", "error": str(e)}, ensure_ascii=False)
+    gaps = [SkillGap(skill=s, status="missing", suggestion="需要补充工业级实战经验") for s in skills]
+    report = recommend_projects_report(skills_gaps=gaps, language=language, provider=provider)
+    return report.model_dump_json(indent=2)
 
 
-@mcp_app.tool()
+@mcp_app.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True))
+@_mcp_tool_safe
 def tool_one_click_tailor(
     jd_text: str,
-    auto_track: bool = True,
+    auto_track: bool = False,
+    enable_github: bool = True,
     provider: str | None = None,
 ) -> str:
     """
@@ -131,40 +149,42 @@ def tool_one_click_tailor(
 
     Args:
         jd_text: 目标岗位的招聘 JD 纯文本或文件路径
-        auto_track: 是否在生成定制简历后自动将其登记到投递看板（默认 True）
+        auto_track: 是否在生成定制简历后自动将其登记到投递看板（默认 False，不自动写入看板）
+        enable_github: 是否针对技能短板检索 GitHub 开源实战项目（默认 True）
         provider: 可选的大模型供应商
+
+    ⚠️ 隐私提示：本工具会将 JD 与求职者档案发送至外部大模型服务，并可能调用 GitHub API。
     """
-    try:
-        from core.workflow import tailor_application_flow
+    from core.workflow import tailor_application_flow
 
-        package = tailor_application_flow(
-            jd_input=jd_text,
-            auto_track=auto_track,
-            provider=provider,
-        )
-        return json.dumps(
-            {
-                "status": "success",
-                "target_company": package.target_company,
-                "target_role": package.target_role,
-                "match_score": package.match_result.score,
-                "pdf_resume": package.resume_files.get("pdf", ""),
-                "docx_resume": package.resume_files.get("docx", ""),
-                "package_report_path": package.package_report_path,
-                "cover_letter_draft": package.match_result.cover_letter_draft,
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    except Exception as e:
-        return json.dumps({"status": "error", "error": str(e)}, ensure_ascii=False)
+    package = tailor_application_flow(
+        jd_input=jd_text,
+        auto_track=auto_track,
+        enable_github_search=enable_github,
+        provider=provider,
+    )
+    return json.dumps(
+        {
+            "status": "success",
+            "target_company": package.target_company,
+            "target_role": package.target_role,
+            "match_score": package.match_result.score,
+            "pdf_resume": package.resume_files.get("pdf", ""),
+            "docx_resume": package.resume_files.get("docx", ""),
+            "package_report_path": package.package_report_path,
+            "cover_letter_draft": package.match_result.cover_letter_draft,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
 
 
-@mcp_app.tool()
+@mcp_app.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+@_mcp_tool_safe
 def tool_track_application(
     company: str,
     role: str,
-    status: str = "applied",
+    status: APPLICATION_STATUS_VALUES = "applied",
     record_id: int | None = None,
     next_schedule_time: str | None = None,
     next_schedule_notes: str | None = None,
@@ -186,40 +206,38 @@ def tool_track_application(
         location: 工作城市
         note: 本次状态变更或面试复盘备忘流水
     """
-    try:
-        from skills.application_tracker import add_application, update_status
-        from core.state import ApplicationStatus
+    from skills.application_tracker import add_application, update_status
+    from core.state import ApplicationStatus
 
-        if record_id:
-            updated = update_status(
-                record_id=record_id,
-                status=status,
-                next_schedule_time=next_schedule_time,
-                next_schedule_notes=next_schedule_notes,
-                salary_range=salary_range,
-                location=location,
-                note=note,
-            )
-            if not updated:
-                return json.dumps({"status": "error", "error": f"未找到 ID 为 {record_id} 的投递记录"}, ensure_ascii=False)
-            return updated.model_dump_json(indent=2)
-        else:
-            created = add_application(
-                company=company,
-                role=role,
-                status=status,
-                salary_range=salary_range,
-                location=location,
-                next_schedule_time=next_schedule_time,
-                next_schedule_notes=next_schedule_notes,
-                note=note,
-            )
-            return created.model_dump_json(indent=2)
-    except Exception as e:
-        return json.dumps({"status": "error", "error": str(e)}, ensure_ascii=False)
+    if record_id:
+        updated = update_status(
+            record_id=record_id,
+            status=status,
+            next_schedule_time=next_schedule_time,
+            next_schedule_notes=next_schedule_notes,
+            salary_range=salary_range,
+            location=location,
+            note=note,
+        )
+        if not updated:
+            raise ValueError(f"未找到 ID 为 {record_id} 的投递记录")
+        return updated.model_dump_json(indent=2)
+    else:
+        created = add_application(
+            company=company,
+            role=role,
+            status=status,
+            salary_range=salary_range,
+            location=location,
+            next_schedule_time=next_schedule_time,
+            next_schedule_notes=next_schedule_notes,
+            note=note,
+        )
+        return created.model_dump_json(indent=2)
 
 
-@mcp_app.tool()
+@mcp_app.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+@_mcp_tool_safe
 def tool_get_upcoming_schedules(days_ahead: int = 7) -> str:
     """
     查询未来若干天内（默认 7 天）以及近 3 天未关闭的笔试与面试待办日程提醒及倒计时。
@@ -227,27 +245,22 @@ def tool_get_upcoming_schedules(days_ahead: int = 7) -> str:
     Args:
         days_ahead: 检索未来多少天内的日程（默认 7 天）
     """
-    try:
-        from skills.application_tracker import get_upcoming_schedules
+    from skills.application_tracker import get_upcoming_schedules
 
-        events = get_upcoming_schedules(days_ahead=days_ahead)
-        return json.dumps([e.model_dump() for e in events], ensure_ascii=False, indent=2)
-    except Exception as e:
-        return json.dumps({"status": "error", "error": str(e)}, ensure_ascii=False)
+    events = get_upcoming_schedules(days_ahead=days_ahead)
+    return json.dumps([e.model_dump() for e in events], ensure_ascii=False, indent=2)
 
 
-@mcp_app.tool()
+@mcp_app.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+@_mcp_tool_safe
 def tool_get_funnel_analytics() -> str:
     """
     获取当前个人求职全流程转化漏斗统计（投递总量、正式投递量、笔试数、进面数、Offer数、进面率%、Offer转化率%及各阶段分布）。
     """
-    try:
-        from skills.application_tracker import get_funnel_analytics
+    from skills.application_tracker import get_funnel_analytics
 
-        stats = get_funnel_analytics()
-        return stats.model_dump_json(indent=2)
-    except Exception as e:
-        return json.dumps({"status": "error", "error": str(e)}, ensure_ascii=False)
+    stats = get_funnel_analytics()
+    return stats.model_dump_json(indent=2)
 
 
 def main():

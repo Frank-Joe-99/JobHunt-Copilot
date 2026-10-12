@@ -4,11 +4,14 @@
 """
 
 import json
+import logging
 import re
 from core.state import SkillGap, ProjectRecommendation, ProjectRecommendationReport
 from tools.github_client import GitHubClient, GitHubRepo
 from tools.llm_client import LLMClient
 from skills.project_recommender.prompt import PROJECT_EVAL_SYSTEM
+
+logger = logging.getLogger(__name__)
 
 
 def _extract_search_terms(skill_text: str) -> list[str]:
@@ -69,9 +72,9 @@ def recommend_projects_report(
         except Exception as e:
             # 单个关键词搜索失败时降级容错，记录提示并继续流程
             if "403" in str(e):
-                print("[!] 提示: GitHub API 触发未认证请求速率限制 (403)，可在 config/settings.yaml 配置 github.token 提升配额。")
+                logger.warning("GitHub API 触发未认证请求速率限制 (403)，可在 config/settings.yaml 配置 github.token 提升配额。")
             else:
-                print(f"[!] 警告: 检索开源项目异常 ({search_query_terms}): {e}")
+                logger.warning(f"检索开源项目异常 ({search_query_terms}): {e}")
             continue
 
     # 如果有语言限定且结果较少，尝试不限语言兜底搜索一次
@@ -91,7 +94,7 @@ def recommend_projects_report(
                         candidate_repos.append(r)
             except Exception as e:
                 if "403" in str(e):
-                    print("[!] 提示: GitHub API 触发未认证请求速率限制 (403)。")
+                    logger.warning("GitHub API 触发未认证请求速率限制 (403)。")
                 continue
 
     if not candidate_repos:

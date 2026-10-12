@@ -4,9 +4,12 @@ JobHunt-Copilot 核心业务编排流水线 (Core Workflow Orchestrator)
 严格遵循零污染原则：所有经历润色与定制仅在内存快照中进行，绝对不篡改主档案 profile.yaml。
 """
 
+import logging
 import time
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from core.config import load_user_profile, PROJECT_ROOT
 from core.state import (
@@ -211,15 +214,15 @@ def tailor_application_flow(
     if not jd_text:
         raise ValueError("传入的岗位招聘 JD 内容为空，请检查输入或文件路径。")
 
-    print("[Step 1/5] 正在深度穿透解析岗位 JD 并进行全维度技术比对...")
+    logger.info("[Step 1/5] 正在深度穿透解析岗位 JD 并进行全维度技术比对...")
     parsed_jd = parse_jd(jd_text, provider=provider)
     match_result = match_profile_with_jd(profile, parsed_jd, provider=provider)
-    print(f"  └─ 目标岗位: {parsed_jd.company} · {parsed_jd.role} (契合度: {match_result.score}/100)")
+    logger.info(f"  └─ 目标岗位: {parsed_jd.company} · {parsed_jd.role} (契合度: {match_result.score}/100)")
 
     # 步骤 2：开源赋能（针对技能缺口搜索 GitHub 项目）
     project_report: ProjectRecommendationReport | None = None
     if enable_github_search and match_result.missing_skills:
-        print("[Step 2/5] 正在针对检测到的技术缺口检索 GitHub 开源实战项目...")
+        logger.info("[Step 2/5] 正在针对检测到的技术缺口检索 GitHub 开源实战项目...")
         try:
             pref_lang = (
                 profile.skills.programming_languages[0].name
@@ -231,14 +234,14 @@ def tailor_application_flow(
                 language=pref_lang,
                 provider=provider,
             )
-            print(f"  └─ 已智能推荐 {len(project_report.recommendations)} 个开源实战补强项目")
+            logger.info(f"  └─ 已智能推荐 {len(project_report.recommendations)} 个开源实战补强项目")
         except Exception as e:
-            print(f"  └─ [提示] 开源项目检索跳过或遇到警告: {e}")
+            logger.warning(f"  └─ [提示] 开源项目检索跳过或遇到警告: {e}")
     else:
-        print("[Step 2/5] 无显著技能缺口或已跳过开源项目检索。")
+        logger.info("[Step 2/5] 无显著技能缺口或已跳过开源项目检索。")
 
     # 步骤 3：经历定向 STAR 提分与内存快照定制（零污染原则）
-    print("[Step 3/5] 正在针对该岗位关键技术考点进行经历 STAR 提分与装配...")
+    logger.info("[Step 3/5] 正在针对该岗位关键技术考点进行经历 STAR 提分与装配...")
     # 深拷贝主档案，确保原版 profile.yaml 绝对干净不受污染
     tailored_profile = profile.model_copy(deep=True)
     if tailored_profile.objective:
@@ -246,10 +249,10 @@ def tailor_application_flow(
 
     polish_report = polish_experiences(profile=tailored_profile, provider=provider)
     _apply_polish_to_profile(tailored_profile, polish_report)
-    print(f"  └─ 已完成 {len(polish_report.items)} 条核心经历的定制化 STAR 强化")
+    logger.info(f"  └─ 已完成 {len(polish_report.items)} 条核心经历的定制化 STAR 强化")
 
     # 步骤 4：编译专属双格式简历
-    print("[Step 4/5] 正在调用排版引擎编译生成定制版 PDF 与 Word 简历...")
+    logger.info("[Step 4/5] 正在调用排版引擎编译生成定制版 PDF 与 Word 简历...")
     if not output_name:
         clean_company = _sanitize_name(parsed_jd.company, "target")
         clean_role = _sanitize_name(parsed_jd.role, "role")
@@ -260,10 +263,10 @@ def tailor_application_flow(
         output_name=output_name,
         template=template,
     )
-    print(f"  └─ 定制版简历已输出: {resume_paths['pdf'].name} & {resume_paths['docx'].name}")
+    logger.info(f"  └─ 定制版简历已输出: {resume_paths['pdf'].name} & {resume_paths['docx'].name}")
 
     # 步骤 5：封装一键定向投递综合战报
-    print("[Step 5/5] 正在封装一键定向投递综合战报...")
+    logger.info("[Step 5/5] 正在封装一键定向投递综合战报...")
     exports_dir = PROJECT_ROOT / "storage" / "exports"
     exports_dir.mkdir(parents=True, exist_ok=True)
 
@@ -289,7 +292,7 @@ def tailor_application_flow(
 
     report_markdown = _build_package_markdown(package, project_report, polish_report)
     report_path.write_text(report_markdown, encoding="utf-8")
-    print(f"  └─ 综合交付物料战报已落盘: {report_path.name}")
+    logger.info(f"  └─ 综合交付物料战报已落盘: {report_path.name}")
 
     # 联动投递追踪器: 自动登记入库
     if auto_track:
@@ -301,10 +304,10 @@ def tailor_application_flow(
                 resume_path=str(resume_paths["pdf"].resolve()),
                 note=f"一键定制流水线生成，岗位匹配度: {match_result.score}/100",
             )
-            print(f"  └─ [✓ 看板联动] 已自动登记入本地投递看板 (Record ID: #{record.id})")
+            logger.info(f"  └─ [✓ 看板联动] 已自动登记入本地投递看板 (Record ID: #{record.id})")
         except Exception as e:
-            print(f"  └─ [提示] 自动登记投递看板跳过: {e}")
+            logger.warning(f"  └─ [提示] 自动登记投递看板跳过: {e}")
 
     elapsed = time.time() - start_time
-    print(f"[✓] 一键岗位定向全套交付流水线顺利完成！总耗时: {elapsed:.2f}s\n")
+    logger.info(f"[✓] 一键岗位定向全套交付流水线顺利完成！总耗时: {elapsed:.2f}s\n")
     return package
