@@ -4,6 +4,7 @@ JobHunt-Copilot 核心业务编排流水线 (Core Workflow Orchestrator)
 严格遵循零污染原则：所有经历润色与定制仅在内存快照中进行，绝对不篡改主档案 profile.yaml。
 """
 
+from collections.abc import Callable
 import logging
 import time
 from datetime import datetime
@@ -194,6 +195,7 @@ def tailor_application_flow(
     provider: str | None = None,
     enable_github_search: bool = True,
     auto_track: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> TailoredApplicationPackage:
     """
     一键岗位定向求职全套交付流水线 (One-Click Tailored Delivery Workflow)
@@ -214,6 +216,8 @@ def tailor_application_flow(
     if not jd_text:
         raise ValueError("传入的岗位招聘 JD 内容为空，请检查输入或文件路径。")
 
+    if progress_callback:
+        progress_callback(1, 5, "正在深度穿透解析岗位 JD 并进行全维度技术比对...")
     logger.info("[Step 1/5] 正在深度穿透解析岗位 JD 并进行全维度技术比对...")
     parsed_jd = parse_jd(jd_text, provider=provider)
     match_result = match_profile_with_jd(profile, parsed_jd, provider=provider)
@@ -222,6 +226,8 @@ def tailor_application_flow(
     # 步骤 2：开源赋能（针对技能缺口搜索 GitHub 项目）
     project_report: ProjectRecommendationReport | None = None
     if enable_github_search and match_result.missing_skills:
+        if progress_callback:
+            progress_callback(2, 5, "正在针对检测到的技术缺口检索 GitHub 开源实战项目...")
         logger.info("[Step 2/5] 正在针对检测到的技术缺口检索 GitHub 开源实战项目...")
         try:
             pref_lang = (
@@ -238,9 +244,13 @@ def tailor_application_flow(
         except Exception as e:
             logger.warning(f"  └─ [提示] 开源项目检索跳过或遇到警告: {e}")
     else:
+        if progress_callback:
+            progress_callback(2, 5, "无显著技能缺口或已跳过开源项目检索。")
         logger.info("[Step 2/5] 无显著技能缺口或已跳过开源项目检索。")
 
     # 步骤 3：经历定向 STAR 提分与内存快照定制（零污染原则）
+    if progress_callback:
+        progress_callback(3, 5, "正在针对该岗位关键技术考点进行经历 STAR 提分与装配...")
     logger.info("[Step 3/5] 正在针对该岗位关键技术考点进行经历 STAR 提分与装配...")
     # 深拷贝主档案，确保原版 profile.yaml 绝对干净不受污染
     tailored_profile = profile.model_copy(deep=True)
@@ -252,6 +262,8 @@ def tailor_application_flow(
     logger.info(f"  └─ 已完成 {len(polish_report.items)} 条核心经历的定制化 STAR 强化")
 
     # 步骤 4：编译专属双格式简历
+    if progress_callback:
+        progress_callback(4, 5, "正在调用排版引擎编译生成定制版 PDF 与 Word 简历...")
     logger.info("[Step 4/5] 正在调用排版引擎编译生成定制版 PDF 与 Word 简历...")
     if not output_name:
         clean_company = _sanitize_name(parsed_jd.company, "target")
@@ -266,6 +278,8 @@ def tailor_application_flow(
     logger.info(f"  └─ 定制版简历已输出: {resume_paths['pdf'].name} & {resume_paths['docx'].name}")
 
     # 步骤 5：封装一键定向投递综合战报
+    if progress_callback:
+        progress_callback(5, 5, "正在封装一键定向投递综合战报...")
     logger.info("[Step 5/5] 正在封装一键定向投递综合战报...")
     exports_dir = PROJECT_ROOT / "storage" / "exports"
     exports_dir.mkdir(parents=True, exist_ok=True)
@@ -309,5 +323,7 @@ def tailor_application_flow(
             logger.warning(f"  └─ [提示] 自动登记投递看板跳过: {e}")
 
     elapsed = time.time() - start_time
+    if progress_callback:
+        progress_callback(5, 5, f"一键交付流水线顺利完成，总耗时: {elapsed:.2f}s")
     logger.info(f"[✓] 一键岗位定向全套交付流水线顺利完成！总耗时: {elapsed:.2f}s\n")
     return package
