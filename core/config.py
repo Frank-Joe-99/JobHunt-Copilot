@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 from typing import Any
 import yaml
+from pydantic import ValidationError
 from core.state import UserProfile, JobPreferences, AppSettings
 
 # project root dir
@@ -32,7 +33,10 @@ def _read_yaml_file(file_path_str: str) -> dict[str, Any]:
     if not file_path.exists():
         raise FileNotFoundError(f"配置文件未找到: {file_path}")
     with open(file_path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f)
+        try:
+            data = yaml.safe_load(f)
+        except yaml.YAMLError:
+            raise ValueError(f"配置 YAML 语法错误: {file_path.name}（未输出私有内容）") from None
     if data is None:
         raise ValueError(f"配置文件内容为空: {file_path}")
     return _expand_env_vars(data)
@@ -42,18 +46,26 @@ def load_user_profile(path: Path | None = None) -> UserProfile:
     """加载并校验用户个人主档案"""
     config_path = path or PROJECT_ROOT / "config" / "profile.yaml"
     raw = _read_yaml_file(str(config_path.resolve()))
-    return UserProfile.model_validate(raw)
+    return _validate_config(UserProfile, raw, config_path.name)
 
 
 def load_job_preference(path: Path | None = None) -> JobPreferences:
     """加载并校验求职偏好配置"""
     config_path = path or PROJECT_ROOT / "config" / "preferences.yaml"
     raw = _read_yaml_file(str(config_path.resolve()))
-    return JobPreferences.model_validate(raw)
+    return _validate_config(JobPreferences, raw, config_path.name)
 
 
 def load_app_settings(path: Path | None = None) -> AppSettings:
     """加载并校验系统运行配置"""
     config_path = path or PROJECT_ROOT / "config" / "settings.yaml"
     raw = _read_yaml_file(str(config_path.resolve()))
-    return AppSettings.model_validate(raw)
+    return _validate_config(AppSettings, raw, config_path.name)
+
+
+def _validate_config(model, raw: dict, filename: str):
+    try:
+        return model.model_validate(raw)
+    except ValidationError as exc:
+        fields = ", ".join(".".join(str(part) for part in error["loc"]) for error in exc.errors())
+        raise ValueError(f"配置字段校验失败: {filename}; 字段: {fields}") from None

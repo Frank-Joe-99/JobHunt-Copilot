@@ -10,7 +10,7 @@ Use `skills.resume_polisher.handler` for the repository's saved profile. If the 
 ## Workflow
 
 1. Confirm the repository's local environment and profile configuration exist. Never display `config/profile.yaml` or expose contact/identity fields in chat.
-2. If a target JD was supplied, pass it to `diagnose_ats(target_jd_text=...)`; also call `polish_experiences()` when the user wants project/experience rewrites. These APIs read the local profile.
+2. If a target JD was supplied, pass it to `diagnose_ats(target_jd_text=...)` and `polish_experiences(jd_text=...)` when rewrites are requested. These APIs read the local profile. Keep the returned snapshot/target references for any later application; do not substitute by matching original strings. Flagged suggestions stay as review proposals rather than automatically replacing facts.
 3. Present evidence-based suggestions in Chinese: stronger verbs, clearer situation/action/result, relevant JD keywords, and any unsupported or ambiguous claims to confirm.
 4. Preserve the candidate's actual responsibility and skill level. Never invent employers, projects, tools, performance numbers, scale, authorship, or impact. When a metric is missing, use `[待确认：测试口径/数据]` or suggest how to measure it; do not estimate it.
 5. Return draft bullets for review. Do not edit the main profile or overwrite resume files unless the user explicitly asks for those file changes.

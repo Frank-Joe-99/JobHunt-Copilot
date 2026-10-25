@@ -1,63 +1,60 @@
-"""
-简历润色与 ATS 诊断业务调度器 (Resume Polisher Handler)
-"""
+"""经历润色与 ATS 诊断；所有模型输入经过业务字段白名单处理。"""
 
 import json
+
 from core.config import load_user_profile
-from core.state import UserProfile, ResumePolishReport, ATSScoreReport
+from core.context import candidate_context
+from core.resume_edits import build_resume_snapshot, review_polish_report
+from core.state import (
+    ATSScoreReport, JobDescription, MatchResult, ResumePolishReport, ResumeSnapshot, UserProfile,
+)
+from skills.resume_polisher.prompt import ATS_DIAGNOSIS_SYSTEM, STAR_REWRITE_SYSTEM
 from tools.llm_client import LLMClient
-from skills.resume_polisher.prompt import STAR_REWRITE_SYSTEM, ATS_DIAGNOSIS_SYSTEM
 
 
 def polish_experiences(
     profile: UserProfile | None = None,
     provider: str | None = None,
+    *,
+    job_description: JobDescription | None = None,
+    match_result: MatchResult | None = None,
+    jd_text: str | None = None,
+    snapshot: ResumeSnapshot | None = None,
 ) -> ResumePolishReport:
-    """对用户档案中的实习与项目经历按 STAR 法则进行深度润色。"""
+    """旧的 profile/provider 调用不变；定制时接收完整 JD 和分析建议。"""
     if profile is None:
         profile = load_user_profile()
-
-    client = LLMClient(provider=provider)
-
-    # 抽取所有需要润色的亮点描述
-    items_to_polish = []
-    for intern in profile.internships:
-        header = f"实习-{intern.company}"
-        if intern.role:
-            header += f"({intern.role})"
-        for h in intern.highlights:
-            items_to_polish.append({"source": header, "text": h})
-
-    for proj in profile.projects:
-        header = f"项目-{proj.name}"
-        if proj.role:
-            header += f"({proj.role})"
-        for h in proj.highlights:
-            items_to_polish.append({"source": header, "text": h})
-
-    for res in profile.research:
-        header = f"科研-{res.name}"
-        for h in res.highlights:
-            items_to_polish.append({"source": header, "text": h})
-
-    if not items_to_polish:
+    snapshot = snapshot or build_resume_snapshot(profile)
+    if not snapshot.targets:
         return ResumePolishReport(
-            summary="档案中未检测到任何经历亮点，请先在 profile.yaml 中补充。",
-            items=[],
+            summary="档案中未检测到经历亮点，请先补充真实经历。",
+            snapshot_id=snapshot.snapshot_id, items=[],
         )
-
-    target_role = profile.objective.target_role if profile.objective else "技术研发"
-
-    prompt_lines = [f"【求职目标岗位】：{target_role}", "【待润色经历清单】："]
-    for idx, item in enumerate(items_to_polish, start=1):
-        prompt_lines.append(f"{idx}. 来源：[{item['source']}] | 原始描述：{item['text']}")
-
-    messages = [
-        {"role": "system", "content": STAR_REWRITE_SYSTEM},
-        {"role": "user", "content": "\n".join(prompt_lines)},
-    ]
-
-    return client.chat_pydantic(messages, ResumePolishReport)
+    payload = {
+        "candidate_facts": candidate_context(profile),
+        "target_job_description": job_description.model_dump() if job_description else None,
+        "raw_jd_text": jd_text if jd_text is not None else (
+            job_description.raw_text if job_description else None
+        ),
+        "analysis_suggestions_not_facts": match_result.model_dump() if match_result else None,
+        "snapshot_id": snapshot.snapshot_id,
+        "highlights": [
+            {
+                "snapshot_id": snapshot.snapshot_id,
+                "target_ref": target.target_ref,
+                "expected_original_hash": target.original_hash,
+                "source": target.source,
+                "original": target.original,
+            }
+            for target in snapshot.targets
+        ],
+    }
+    with LLMClient(provider=provider) as client:
+        report = client.chat_pydantic([
+            {"role": "system", "content": STAR_REWRITE_SYSTEM},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False, indent=2)},
+        ], ResumePolishReport)
+    return review_polish_report(profile, report, snapshot)
 
 
 def diagnose_ats(
@@ -65,43 +62,16 @@ def diagnose_ats(
     target_jd_text: str | None = None,
     provider: str | None = None,
 ) -> ATSScoreReport:
-    """对简历档案进行 ATS 关键词覆盖率与规范性体检打分。"""
+    """评估业务材料的表达和证据覆盖，不冒充招聘平台实际筛选结果。"""
     if profile is None:
         profile = load_user_profile()
-
-    client = LLMClient(provider=provider)
-
-    profile_summary = {
-        "basics": {"name": profile.basics.name, "degree": profile.basics.degree},
-        "objective": profile.objective.model_dump() if profile.objective else None,
-        "education": [
-            {"school": e.school, "major": e.major, "degree": e.degree}
-            for e in profile.education
-        ],
-        "skills": profile.skills.model_dump() if profile.skills else None,
-        "internships": [
-            {"company": i.company, "role": i.role, "highlights": i.highlights}
-            for i in profile.internships
-        ],
-        "projects": [
-            {"name": p.name, "tech_stack": p.tech_stack, "highlights": p.highlights}
-            for p in profile.projects
-        ],
+    payload = {
+        "candidate_facts": candidate_context(profile),
+        "raw_jd_text": target_jd_text,
     }
-
-    user_parts = [
-        "【候选人当前简历全貌】：",
-        json.dumps(profile_summary, ensure_ascii=False, indent=2),
-    ]
-    if target_jd_text:
-        user_parts.extend(["\n【对标的目标企业招聘 JD】：", target_jd_text.strip()])
-    else:
-        user_parts.append("\n（未提供特定 JD，请按通用大厂 ATS 标准体检）")
-
-    messages = [
-        {"role": "system", "content": ATS_DIAGNOSIS_SYSTEM},
-        {"role": "user", "content": "\n".join(user_parts)},
-    ]
-
-    return client.chat_pydantic(messages, ATSScoreReport)
+    with LLMClient(provider=provider) as client:
+        return client.chat_pydantic([
+            {"role": "system", "content": ATS_DIAGNOSIS_SYSTEM},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False, indent=2)},
+        ], ATSScoreReport)
 

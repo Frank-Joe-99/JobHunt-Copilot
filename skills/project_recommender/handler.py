@@ -38,10 +38,10 @@ def recommend_projects_report(
         provider: 大模型供应商名称
     """
     # 1. 过滤出存在缺口的技能 (missing 或 partial)
-    target_gaps = [gap for gap in skills_gaps if gap.status != "matched"]
+    target_gaps = [gap for gap in skills_gaps if gap.status in ("missing", "partial")]
     if not target_gaps:
         return ProjectRecommendationReport(
-            overview="候选人当前技术栈已全部命中目标岗位要求，无需额外补充练手项目！",
+            overview="暂无已确认的技能缺口；未提供证据的技能需先澄清，不直接判为不会。",
             recommendations=[],
         )
 
@@ -74,7 +74,7 @@ def recommend_projects_report(
             if "403" in str(e):
                 logger.warning("GitHub API 触发未认证请求速率限制 (403)，可在 config/settings.yaml 配置 github.token 提升配额。")
             else:
-                logger.warning(f"检索开源项目异常 ({search_query_terms}): {e}")
+                logger.warning("检索开源项目异常 (%s)", type(e).__name__)
             continue
 
     # 如果有语言限定且结果较少，尝试不限语言兜底搜索一次

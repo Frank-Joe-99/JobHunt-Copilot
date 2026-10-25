@@ -5,6 +5,7 @@ JobHunt-Copilot 核心业务编排流水线 (Core Workflow Orchestrator)
 """
 
 from collections.abc import Callable
+import json
 import logging
 import time
 from datetime import datetime
@@ -13,8 +14,11 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 from core.config import load_user_profile, PROJECT_ROOT
+from core.resume_edits import apply_resume_edits, build_resume_snapshot, build_diff_markdown
 from core.state import (
     UserProfile,
+    Objective,
+    ResumeSnapshot,
     JobDescription,
     MatchResult,
     ProjectRecommendationReport,
@@ -54,20 +58,11 @@ def _resolve_jd_text(jd_input: str | Path) -> str:
     raise ValueError(f"不支持的 JD 输入类型: {type(jd_input)}")
 
 
-def _apply_polish_to_profile(profile: UserProfile, polish_report: ResumePolishReport) -> None:
-    """
-    将润色后的 STAR 亮点应用到深拷贝后的内存 Profile 中。
-    保持零污染：仅修改内存实例，不回写磁盘。
-    """
-    polish_map = {item.original.strip(): item.polished.strip() for item in polish_report.items}
-
-    def _replace_highlights(items):
-        for item in items:
-            item.highlights = [polish_map.get(h.strip(), h) for h in item.highlights]
-
-    _replace_highlights(profile.internships)
-    _replace_highlights(profile.projects)
-    _replace_highlights(profile.research)
+def _apply_polish_to_profile(
+    profile: UserProfile, polish_report: ResumePolishReport, snapshot: ResumeSnapshot,
+) -> int:
+    """严格快照定位；存疑提案不应用，所有结构校验先于写入。"""
+    return apply_resume_edits(profile, polish_report, snapshot)
 
 
 def _build_package_markdown(
@@ -88,12 +83,12 @@ def _build_package_markdown(
     missing_str = (
         "\n".join(f"- **{g.skill}**（{g.status}）：{g.suggestion}" for g in match_result.missing_skills)
         if match_result.missing_skills
-        else "- 无明显硬伤技能缺口"
+        else "- 本次未列出缺口，不代表所有要求都已得到验证"
     )
     advice_str = (
         "\n".join(f"- {a}" for a in match_result.resume_tuning_advice)
         if match_result.resume_tuning_advice
-        else "- 简历整体与岗位高度贴合"
+        else "- 本次未提供额外调优建议"
     )
 
     # 2. 开源项目推荐条目
@@ -109,7 +104,7 @@ def _build_package_markdown(
             )
         project_section_str = "\n".join(proj_recs_md)
     else:
-        project_section_str = "当前技能已基本覆盖目标岗位，无需额外补充开源实战项目。"
+        project_section_str = "未生成开源推荐（可能已关闭、服务不可用或没有合适结果）。请结合技能缺口判断，不代表已覆盖所有要求。"
 
     # 3. 润色提分条目
     if polish_report and polish_report.items:
@@ -118,12 +113,12 @@ def _build_package_markdown(
             polish_items_md.append(
                 f"**经历亮点 {idx}（{item.source}）**\n"
                 f"- 原始描述：`{item.original}`\n"
-                f"- **STAR 强化**：{item.polished}\n"
+                f"- **改写建议（{'待核实，未应用' if item.needs_confirmation else '已应用到草稿'}）**：{item.polished}\n"
                 f"- *提分理由*：{item.improvement_reason}\n"
             )
         polish_section_str = "\n".join(polish_items_md)
     else:
-        polish_section_str = "未执行额外润色或经历已处于最优状态。"
+        polish_section_str = "本次未提出额外改写建议，仍请结合岗位核对材料。"
 
     pdf_path_obj = Path(package.resume_files.get("pdf", ""))
     docx_path_obj = Path(package.resume_files.get("docx", ""))
@@ -136,21 +131,24 @@ def _build_package_markdown(
 - **生成时间**：{timestamp_str}
 - **目标企业**：**{package.target_company}**
 - **目标岗位**：**{package.target_role}**
-- **岗位契合度**：**{match_result.score} / 100**
+- **岗位契合度**：**{match_result.score} / 100**（练习诊断，不是录用概率）
+- **物料状态**：草稿；{'存在待核实建议，相关亮点保留原文' if package.review_required else '请核对事实后使用'}
+- **完整修改对比**：{package.resume_diff_path}
+- **原始快照备份**：{package.resume_snapshot_path}
 
 ---
 
 ## 🎯 定制版双格式简历成品 (Generated Resumes)
 
-针对本岗位定向优化排版的简历已编译完成，点击直接查看：
-- 📄 **PDF 格式（推荐直投）**：{pdf_link_str}
+针对本岗位的简历草稿已编译。生成物料不表示已经投递；机器检查不替代事实核实。
+- 📄 **PDF 草稿（核实后使用）**：{pdf_link_str}
 - 📝 **Word 格式（可二次微调）**：{docx_link_str}
 
 ---
 
 ## ✉️ 针对该岗位的定制自荐信草稿 (Customized Cover Letter)
 
-> **适用场景**：可直接粘贴至招聘平台（BOSS直聘/拉勾）开场白沟通消息、或邮件网申附言中。
+> **适用场景**：核实内容后可用于招聘平台沟通或邮件网申附言。
 
 ```text
 {match_result.cover_letter_draft}
@@ -206,7 +204,7 @@ def tailor_application_flow(
     3. [经历 STAR 定向强化] 结合目标岗位核心考点对经历进行提分强化（内存深拷贝零污染）
     4. [简历生成] 调用 resume_generator，编译输出针对该企业的专属 Word + PDF 双格式简历
     5. [打包战报] 生成 Markdown 格式《一键定向投递综合战报》，汇总自荐信、缺口补强与简历路径
-    6. [自动看板追踪] 如开启 auto_track，自动将本次投递登记入本地 SQLite 看板
+    6. [自动看板追踪] 如开启 auto_track，自动将本次物料准备登记为心愿单，不标记已投递
     """
     start_time = time.time()
     if profile is None:
@@ -221,7 +219,7 @@ def tailor_application_flow(
     logger.info("[Step 1/5] 正在深度穿透解析岗位 JD 并进行全维度技术比对...")
     parsed_jd = parse_jd(jd_text, provider=provider)
     match_result = match_profile_with_jd(profile, parsed_jd, provider=provider)
-    logger.info(f"  └─ 目标岗位: {parsed_jd.company} · {parsed_jd.role} (契合度: {match_result.score}/100)")
+    logger.info("  └─ JD 解析与匹配完成 (契合度: %s/100)", match_result.score)
 
     # 步骤 2：开源赋能（针对技能缺口搜索 GitHub 项目）
     project_report: ProjectRecommendationReport | None = None
@@ -242,7 +240,7 @@ def tailor_application_flow(
             )
             logger.info(f"  └─ 已智能推荐 {len(project_report.recommendations)} 个开源实战补强项目")
         except Exception as e:
-            logger.warning(f"  └─ [提示] 开源项目检索跳过或遇到警告: {e}")
+            logger.warning("开源推荐不可用，主流程继续 (%s)", type(e).__name__)
     else:
         if progress_callback:
             progress_callback(2, 5, "无显著技能缺口或已跳过开源项目检索。")
@@ -256,10 +254,17 @@ def tailor_application_flow(
     tailored_profile = profile.model_copy(deep=True)
     if tailored_profile.objective:
         tailored_profile.objective.target_role = parsed_jd.role
+    else:
+        tailored_profile.objective = Objective(target_role=parsed_jd.role)
 
-    polish_report = polish_experiences(profile=tailored_profile, provider=provider)
-    _apply_polish_to_profile(tailored_profile, polish_report)
-    logger.info(f"  └─ 已完成 {len(polish_report.items)} 条核心经历的定制化 STAR 强化")
+    original_profile = tailored_profile.model_copy(deep=True)
+    snapshot = build_resume_snapshot(tailored_profile)
+    polish_report = polish_experiences(
+        profile=tailored_profile, provider=provider, job_description=parsed_jd,
+        match_result=match_result, jd_text=jd_text, snapshot=snapshot,
+    )
+    applied_count = _apply_polish_to_profile(tailored_profile, polish_report, snapshot)
+    logger.info("已生成 %s 条建议，应用 %s 条到定制草稿", len(polish_report.items), applied_count)
 
     # 步骤 4：编译专属双格式简历
     if progress_callback:
@@ -287,8 +292,15 @@ def tailor_application_flow(
     timestamp_file = datetime.now().strftime("%Y%m%d_%H%M%S")
     clean_company = _sanitize_name(parsed_jd.company, "公司")
     clean_role = _sanitize_name(parsed_jd.role, "岗位")
-    report_filename = f"package_{clean_company}_{clean_role}_{timestamp_file}.md"
+    report_filename = f"package_{clean_company}_{clean_role}_{timestamp_file}_{snapshot.snapshot_id[:8]}.md"
     report_path = exports_dir / report_filename
+    diff_path = exports_dir / f"resume_diff_{snapshot.snapshot_id}.md"
+    snapshot_path = exports_dir / f"resume_snapshot_{snapshot.snapshot_id}.json"
+    diff_path.write_text(build_diff_markdown(polish_report), encoding="utf-8")
+    snapshot_path.write_text(json.dumps({
+        "snapshot": snapshot.model_dump(mode="json"),
+        "profile": original_profile.model_dump(mode="json"),
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
 
     package = TailoredApplicationPackage(
         target_company=parsed_jd.company,
@@ -296,12 +308,15 @@ def tailor_application_flow(
         job_description=parsed_jd,
         match_result=match_result,
         project_recommendations=project_report,
-        tailored_experiences_summary=f"针对 {parsed_jd.role} 核心考点完成了 {len(polish_report.items)} 条经历的 STAR 精修",
+        tailored_experiences_summary=f"生成 {len(polish_report.items)} 条建议，应用 {applied_count} 条到定制草稿；存疑项保留原文",
         resume_files={
             "pdf": str(resume_paths["pdf"].resolve()),
             "docx": str(resume_paths["docx"].resolve()),
         },
         package_report_path=str(report_path.resolve()),
+        resume_diff_path=str(diff_path.resolve()),
+        resume_snapshot_path=str(snapshot_path.resolve()),
+        review_required=polish_report.needs_confirmation,
     )
 
     report_markdown = _build_package_markdown(package, project_report, polish_report)
@@ -314,13 +329,13 @@ def tailor_application_flow(
             record = add_application(
                 company=package.target_company,
                 role=package.target_role,
-                status=ApplicationStatus.APPLIED,
+                status=ApplicationStatus.WISHLIST,
                 resume_path=str(resume_paths["pdf"].resolve()),
-                note=f"一键定制流水线生成，岗位匹配度: {match_result.score}/100",
+                note=f"已准备简历草稿，尚未确认投递；岗位匹配度: {match_result.score}/100",
             )
             logger.info(f"  └─ [✓ 看板联动] 已自动登记入本地投递看板 (Record ID: #{record.id})")
         except Exception as e:
-            logger.warning(f"  └─ [提示] 自动登记投递看板跳过: {e}")
+            logger.warning("准备记录登记失败 (%s)", type(e).__name__)
 
     elapsed = time.time() - start_time
     if progress_callback:
