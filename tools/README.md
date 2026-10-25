@@ -4,7 +4,9 @@
 
 模型能力配置新增 `supports_temperature`、可空的 `temperature`、`token_limit_parameter`、`output_token_limit`、`context_char_limit` 和 `supports_json_mode`，见 `config/settings.example.yaml`。只修改本地配置时才影响具体端点；不按模型名称猜测能力。输入按字符预算检查，超限明确报错而不裁掉经历；输出不再统一截为 8192。
 
-`chat()` 仍返回字符串，`chat_stream()` 仍返回字符串生成器。调用状态通过 `last_response` 暴露（包括结束原因、HTTP 状态、用量和 JSON 修复标记，不含正文）。拒绝、截断、缺少正常结束原因和流中断会报错；经过结构修复的 JSON 不直接作为正式 Pydantic 业务结果。原生 schema 与分层自动降级留待 M08，不在本批实施。
+`chat()` 仍返回字符串，`chat_stream()` 仍返回字符串生成器。调用状态通过 `last_response` 暴露（包括结束原因、HTTP 状态、用量和 JSON 修复标记，不含正文）。拒绝、截断、缺少正常结束原因和流中断会报错；经过结构修复的 JSON 不直接作为正式 Pydantic 业务结果。
+
+M08 为 `chat_pydantic()` / `chat_json()` 提供分层格式：显式开启且 schema 可表示时用 `json_schema`，其次按配置用 `json_object`，最后用技术格式指令生成 JSON。只有明确的格式不支持错误才能自动降级；无效 schema、鉴权、拒绝和截断不降级。网络重试、格式降级及可选字段重生成共用次数、总耗时和响应大小预算。`last_response` 新增 `format_used`、`fallback_reasons`、`attempts`、`validation_failures`、`elapsed_seconds`。详见 [M08 实施说明](../future-upgrade/M08-STRUCTURED-OUTPUT.md)。
 
 > 本模块为 JobHunt-Copilot 提供**底层网络通信与外部 API 驱动封装**。负责处理与大模型服务提供商及 GitHub REST API 的网络交互，实现连接池复用、故障重试与数据反序列化。
 

@@ -56,9 +56,11 @@ def protect_private_data_and_network(monkeypatch, tmp_path):
     from skills.mock_interviewer import handler as interview
     from skills.mock_interviewer import session_store
     from tools import github_client
+    from tools import llm_formats
     monkeypatch.setattr(interview, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(session_store, "DEFAULT_DB_PATH", tmp_path / "interviews.db")
     monkeypatch.setattr(github_client, "DEFAULT_CACHE_PATH", tmp_path / "github_cache.db")
+    monkeypatch.setattr(llm_formats, "DEFAULT_CACHE_PATH", tmp_path / "llm_capabilities.db")
 
 
 @pytest.fixture

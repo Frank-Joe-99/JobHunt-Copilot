@@ -32,6 +32,15 @@ llm:
       output_token_limit: null          # 超过配置上限时报错，不静默截断
       context_char_limit: 100000        # 应用输入字符预算，不代表模型 token 窗口
       supports_json_mode: null          # true/false 显式指定；null 沿用供应商兼容默认
+      supports_json_schema: false       # 经端点验证后才能设 true；不按模型名猜测
+      structured_output: auto           # auto / json_schema / json_object / prompt_json
+      allow_format_fallback: true       # 仅明确“不支持格式”才自动降级
+      structured_max_attempts: 3        # 网络重试、格式降级、字段重生成共用次数
+      structured_total_timeout_seconds: 60
+      structured_validation_retries: 0 # 可显式启用最多 2 次字段重生成，仍受总预算约束
+      structured_max_response_bytes: 2000000
+      format_cache_ttl_seconds: 86400   # 0 禁用能力缓存；缓存不保存正文或密钥
+      capability_revision: "1"         # 更新此值使旧能力缓存失效
 
     claude:
       api_key: "sk-ant-your-claude-api-key"

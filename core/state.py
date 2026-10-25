@@ -282,6 +282,15 @@ class LLMProviderConfig(BaseModel):
     output_token_limit: int | None = Field(None, gt=0, description="端点允许的最大输出预算")
     context_char_limit: int | None = Field(100000, gt=0, description="输入字符预算；超限报错而不截断")
     supports_json_mode: bool | None = Field(None, description="null 沿用供应商兼容默认；false 禁用 JSON mode")
+    supports_json_schema: bool = False
+    structured_output: Literal["auto", "json_schema", "json_object", "prompt_json"] = "auto"
+    allow_format_fallback: bool = True
+    structured_max_attempts: int = Field(3, ge=1, le=8)
+    structured_total_timeout_seconds: float = Field(60, gt=0, le=300)
+    structured_validation_retries: int = Field(0, ge=0, le=2)
+    structured_max_response_bytes: int = Field(2000000, gt=0)
+    format_cache_ttl_seconds: int = Field(86400, ge=0)
+    capability_revision: str = "1"
 
 
 class LLMResponseMetadata(BaseModel):
@@ -292,6 +301,11 @@ class LLMResponseMetadata(BaseModel):
     http_status: int | None = None
     usage: dict[str, int] = Field(default_factory=dict)
     json_repaired: bool = False
+    format_used: str | None = None
+    fallback_reasons: list[str] = Field(default_factory=list)
+    attempts: int = 0
+    validation_failures: int = 0
+    elapsed_seconds: float = 0
 
 
 class LLMConfig(BaseModel):
