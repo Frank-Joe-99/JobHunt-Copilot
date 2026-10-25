@@ -104,6 +104,14 @@ uv run python -X utf8 check_config.py
 
   # 可选：提供 JD 并进入允许提示、讲解的训练模式；旧命令保持可用
   uv run jobhunt interview --target-role 前端开发工程师 --company 示例企业 --jd "前端岗位要求：React 与可访问性" --mode practice
+
+  # 中断后恢复原会话（沿用原岗位、事实快照和模式）
+  uv run jobhunt interview --resume-session <session_id>
+
+  # 离线查看或删除本地会话
+  uv run jobhunt interview-sessions list
+  uv run jobhunt interview-sessions show <session_id>
+  uv run jobhunt interview-sessions delete <session_id>
   ```
 - **参数说明**：
   | 参数名 | 必填 | 默认值 | 说明 |
@@ -116,7 +124,9 @@ uv run python -X utf8 check_config.py
   - 输入作答内容后按两次回车提交。
   - 输入 `next`：跳过当前面试环节。
   - 输入 `finish`：提前结束面试并生成复盘报告。
-- **预期产物**：终端打印五维能力雷达评分，并在 `storage/interview_logs/` 下生成完整复盘 Markdown 报告。
+  - 输入 `/pause`：暂停并保存；输入 `/retry`：重试未完成请求，不重复登记回答。EOF 或 Ctrl+C 也会暂停。
+- **预期产物**：会话 ID、创建时的档案快照和已提交回答保存在私有 `storage/interviews.db`；完整问题生成成功后才推进相应阶段。复盘只使用正式问答，保存在 `storage/interview_logs/`，缺少证据的维度不强制评分。
+- 恢复不重新读取当前主档案；改变岗位或事实背景请新建会话。原模型/端点配置变化时须显式传 `--provider`。删除会话会一并删除请求记录，已单独导出的 Markdown 报告仍保留，需另行删除。
 
 ---
 

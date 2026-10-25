@@ -4,6 +4,7 @@
 """
 
 import sys
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -144,6 +145,7 @@ def cmd_interview(
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help="大模型供应商"),
     jd: Optional[str] = typer.Option(None, "--jd", help="可选 JD 文本或本地文本路径"),
     mode: str = typer.Option("simulation", "--mode", help="simulation 模拟 / practice 训练"),
+    resume_session: Optional[str] = typer.Option(None, "--resume-session", help="恢复已有会话 ID，沿用创建时事实与岗位"),
 ):
     """
     🎯 【全真 AI 模拟面试官】
@@ -159,7 +161,39 @@ def cmd_interview(
         provider=provider,
         jd=jd,
         mode=mode,
+        resume_session=resume_session,
     )
+
+
+@app.command(name="interview-sessions")
+def cmd_interview_sessions(
+    action: str = typer.Argument("list", help="list 列表 / show 查看 / delete 删除会话及请求记录"),
+    session_id: Optional[str] = typer.Argument(None, help="show / delete 使用的会话 ID"),
+    limit: int = typer.Option(20, "--limit", min=1, max=200, help="列表上限"),
+):
+    """离线管理本地面试会话；删除会话不删除单独导出的 Markdown 报告。"""
+    from skills.mock_interviewer.session_store import InterviewStore
+    store = InterviewStore()
+    if action not in ("list", "show", "delete"):
+        raise typer.BadParameter("必须为 list / show / delete", param_hint="action")
+    if action != "list" and not session_id:
+        raise typer.BadParameter("show / delete 需要会话 ID", param_hint="session_id")
+    try:
+        if action == "list":
+            result = store.list_sessions(limit)
+        elif action == "show":
+            session = store.load(session_id).session
+            pending = store.unfinished(session_id)
+            result = {
+                "session": session.model_dump(mode="json"),
+                "unfinished_request": pending.model_dump(mode="json") if pending else None,
+            }
+        else:
+            result = {"session_id": session_id, "deleted": store.delete(session_id)}
+    except (ValueError, RuntimeError, OSError) as exc:
+        console.print(str(exc), style="red", markup=False)
+        raise typer.Exit(code=2) from None
+    console.print(json.dumps(result, ensure_ascii=False, indent=2), markup=False, highlight=False)
 
 
 # ==============================================================================

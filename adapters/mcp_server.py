@@ -39,7 +39,7 @@ mcp_app = MCPServer(
     description="JobHunt-Copilot 智能求职赋能套件：简历排版、JD穿透匹配、开源实战项目推荐、一键定向全套交付、投递日程看板、ATS体检、STAR润色与模拟面试。",
 )
 
-# 内存会话管理：模拟面试多轮状态机缓存
+# 兼容缓存；SQLite 是会话的唯一事实来源，重启和跨进程访问不依赖此字典。
 _interview_sessions: dict[str, object] = {}
 
 
@@ -397,6 +397,7 @@ def tool_interview_start(
     provider: str | None = None,
     jd_text: str | None = None,
     mode: Literal["simulation", "practice"] = "simulation",
+    resume_session_id: str | None = None,
 ) -> str:
     """
     初始化一场沉浸式 AI 模拟面试会话。
@@ -407,36 +408,47 @@ def tool_interview_start(
         target_role: 目标应聘岗位（如 后端开发工程师、AI Infra 研究员）
         interviewer_role: 面试官人设 (strict_architect: 硬核架构师 / practical_lead: 实战带教组长 / hrbp: 敏锐HRBP)
         provider: 可选的大模型供应商
+        resume_session_id: 恢复已有会话，使用原岗位、事实快照及模式；不请求模型
 
     Returns:
         JSON 包含 session_id、面试官第一句开场白及当前阶段
     """
-    from skills.mock_interviewer import start_interview
+    from core.interview_service import resume_interview, start_interview
     from core.state import InterviewRole, JobDescription
 
-    role_enum = InterviewRole(interviewer_role)
-    session, stream = start_interview(
-        target_role=target_role,
-        target_company=target_company,
-        role=role_enum,
-        provider=provider,
-        job_description=JobDescription(company=target_company, role=target_role, raw_text=jd_text) if jd_text else None,
-        mode=mode,
-    )
-
-    opening_question = "".join(list(stream)).strip()
+    error_code = None
+    if resume_session_id:
+        session = resume_interview(resume_session_id)
+        opening_question = session.history[-1].question if session.history else ""
+    else:
+        session, stream = start_interview(
+            target_role=target_role, target_company=target_company,
+            role=InterviewRole(interviewer_role), provider=provider,
+            job_description=JobDescription(company=target_company, role=target_role, raw_text=jd_text) if jd_text else None,
+            mode=mode,
+        )
+        try:
+            opening_question = "".join(stream).strip()
+        except (ValueError, RuntimeError, OSError) as exc:
+            error_code = type(exc).__name__
+            opening_question = ""
     _interview_sessions[session.session_id] = session
 
     return json.dumps(
         {
-            "status": "success",
+            "status": "recoverable_error" if error_code else "success",
             "session_id": session.session_id,
-            "target_company": target_company,
-            "target_role": target_role,
-            "interviewer_role": interviewer_role,
+            "target_company": session.target_company,
+            "target_role": session.target_role,
+            "interviewer_role": session.role.value,
             "current_stage": session.current_stage.value,
             "opening_question": opening_question,
-            "message": "模拟面试已开启，请调用 tool_interview_answer 进行作答交互。",
+            "is_finished": session.is_finished,
+            "is_paused": session.is_paused,
+            "revision": session.revision,
+            "pending_request_id": session.pending_request_id,
+            "error_code": error_code,
+            "message": "会话已保存；有未完成请求时请调用 answer 输入 /retry，或调用 finish 结束。",
         },
         ensure_ascii=False,
         indent=2,
@@ -449,36 +461,51 @@ def tool_interview_answer(
     session_id: str,
     user_answer: str,
     provider: str | None = None,
+    request_id: str | None = None,
 ) -> str:
     """
     向正在进行的模拟面试提交回答。
     面试官将针对应答进行原理深挖、技术追问或驱动状态机推演进入下一阶段（自我介绍->项目深挖->八股场景->反问收尾）。
-    用户亦可输入快捷指令：'next'（跳过当前环节）或 'finish'（申请提前结束面试）。
+    支持 next、finish、/pause、/retry；重试同一次作答须复用 request_id 和原文。
 
     Args:
         session_id: 面试会话 ID（由 tool_interview_start 返回）
         user_answer: 候选人的回答文本或快捷指令
         provider: 可选的大模型供应商
+        request_id: 可选幂等请求 ID；相同 ID 的完整结果直接重放，不再次调用模型
     """
-    session = _interview_sessions.get(session_id)
-    if not session:
-        raise ValueError(f"未找到 ID 为 '{session_id}' 的活跃面试会话，可能已结束或未初始化。")
+    from core.interview_service import step_interview_stream
+    from skills.mock_interviewer.session_store import InterviewStore
 
-    from skills.mock_interviewer import step_interview_stream
-
+    session = InterviewStore().load(session_id).session
     stream = step_interview_stream(
         session=session,
         user_answer=user_answer,
         provider=provider,
+        request_id=request_id,
     )
-    interviewer_reply = "".join(list(stream)).strip()
+    error_code = None
+    try:
+        interviewer_reply = "".join(stream).strip()
+    except (ValueError, RuntimeError, OSError) as exc:
+        error_code = type(exc).__name__
+        interviewer_reply = ""
+    pending = InterviewStore().unfinished(session_id)
+    session.pending_request_id = pending.request_id if pending else None
+    _interview_sessions[session_id] = session
 
     return json.dumps(
         {
-            "status": "success",
+            "status": "recoverable_error" if error_code else "success",
             "session_id": session_id,
             "current_stage": session.current_stage.value,
             "is_finished": session.is_finished,
+            "is_paused": session.is_paused,
+            "revision": session.revision,
+            "pending_request_id": session.pending_request_id,
+            "request_id": request_id,
+            "error_code": error_code,
+            "message": "请求未完成；可恢复会话后 /retry，或结束生成报告。" if error_code else "本次请求已完成。",
             "interviewer_reply": interviewer_reply,
             "turns_count": len(session.history),
         },
@@ -492,6 +519,7 @@ def tool_interview_answer(
 def tool_interview_finish(
     session_id: str,
     provider: str | None = None,
+    request_id: str = "finish",
 ) -> str:
     """
     终结指定的模拟面试会话，驱动大模型出具全维度复盘体检报告（六维能力打分、亮点与失分点、满分范例）并持久化落盘为 Markdown 文件。
@@ -499,14 +527,13 @@ def tool_interview_finish(
     Args:
         session_id: 面试会话 ID
         provider: 可选的大模型供应商
+        request_id: 默认 finish；重复读取相同报告不再次调用模型
     """
-    session = _interview_sessions.get(session_id)
-    if not session:
-        raise ValueError(f"未找到 ID 为 '{session_id}' 的面试会话。")
+    from core.interview_service import finish_interview
+    from skills.mock_interviewer.session_store import InterviewStore
 
-    from skills.mock_interviewer import finish_interview
-
-    report, report_path = finish_interview(session=session, provider=provider)
+    session = InterviewStore().load(session_id).session
+    report, report_path = finish_interview(session=session, provider=provider, request_id=request_id)
     _interview_sessions.pop(session_id, None)
 
     return json.dumps(

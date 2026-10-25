@@ -28,8 +28,9 @@ from rich.text import Text
 
 from core.config import load_job_preference, load_user_profile
 from core.state import InterviewRole, InterviewStage
-from skills.mock_interviewer import (
+from core.interview_service import (
     finish_interview,
+    resume_interview,
     start_interview,
     step_interview_stream,
 )
@@ -161,11 +162,11 @@ def get_candidate_input() -> str:
     提交方式：
     1. 输入内容后，按 Enter 换行，再按一次 Enter（即空行回车）自动提交
     2. 或在末尾单独一行输入 /send 立即提交
-    3. 支持输入 /next 跳过当前阶段，/finish 提前交卷
+    3. /next 跳过，/finish 交卷，/pause 暂停，/retry 重试失败请求
     """
     console.print(
         "\n[bold green]👤 候选人回答[/bold green] "
-        "[dim](支持换行/粘贴。输入完成后[bold yellow]按两次 Enter（空行回车）[/bold yellow]或输入 [bold yellow]/send[/bold yellow] 提交；输入 [bold yellow]/next[/bold yellow] 跳过，[bold yellow]/finish[/bold yellow] 交卷)[/dim]:"
+        "[dim](空行或 /send 提交；/next 跳过；/finish 交卷；/pause 暂停；/retry 重试)[/dim]:"
     )
 
     lines = []
@@ -174,10 +175,12 @@ def get_candidate_input() -> str:
             line = input()
         except EOFError:
             # 兼容 Ctrl+Z / Ctrl+D
-            break
+            if lines:
+                break
+            return "/pause"
         except KeyboardInterrupt:
-            console.print("\n[yellow]检测到中断，正在提前交卷...[/yellow]")
-            return "/finish"
+            console.print("\n[yellow]检测到中断，正在暂停会话...[/yellow]")
+            return "/pause"
 
         clean_line = line.strip()
 
@@ -187,6 +190,10 @@ def get_candidate_input() -> str:
             return "/next"
         if stripped_lower in ("/finish", "finish", "交卷", "quit", "/quit"):
             return "/finish"
+        if stripped_lower in ("/pause", "pause", "暂停"):
+            return "/pause"
+        if stripped_lower in ("/retry", "retry", "重试"):
+            return "/retry"
         if stripped_lower in ("/send", "send", "/done", "done", "//"):
             # 显式提交指令
             break
@@ -296,113 +303,98 @@ def render_debrief_dashboard(report, file_path: Path) -> None:
     )
 
 
+def display_stream(stream, session, provider=None) -> None:
+    """终端展示可以失败；持久化服务负责保存回答并隔离部分问题。"""
+    role_color = ROLE_INFO[session.role]["color"]
+    console.print(f"\n[bold {role_color}]🤖 面试官：[/bold {role_color}]", end="")
+    try:
+        for chunk in stream:
+            console.print(chunk, end="", highlight=False, markup=False)
+            sys.stdout.flush()
+    except KeyboardInterrupt:
+        stream.close()
+        list(step_interview_stream(session, "/pause", provider=provider))
+        console.print("\n[yellow]会话已暂停，已提交的回答已保存。[/yellow]")
+    except (ValueError, RuntimeError, OSError) as exc:
+        console.print(f"\n[bold red]本次请求未完成：[/bold red]{exc}")
+        console.print("[yellow]回答已保存。输入 /retry 重试、/pause 暂停或 /finish 交卷。[/yellow]")
+    console.print()
+
+
 @app.command()
 def main(
     role: Optional[str] = typer.Option(None, "--role", "-r", help="面试官风格: strict_architect / practical_lead / hrbp"),
     company: Optional[str] = typer.Option(None, "--company", "-c", help="目标企业名称"),
     target_role: Optional[str] = typer.Option(None, "--target-role", "-t", help="目标岗位名称"),
-    provider: Optional[str] = typer.Option(None, "--provider", "-p", help="指定大模型供应商 (默认使用 settings.yaml 默认配置)"),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help="指定大模型供应商"),
     jd: Optional[str] = typer.Option(None, "--jd", help="可选 JD 文本或本地文本路径"),
     mode: str = typer.Option("simulation", "--mode", help="simulation 模拟 / practice 训练"),
+    resume_session: Optional[str] = typer.Option(None, "--resume-session", help="恢复已有会话 ID"),
 ) -> None:
-    """启动全真 AI 模拟面试"""
+    """启动或恢复 AI 模拟面试，保存的事实快照不会随主档案变化。"""
     render_banner()
-
-    # 1. 引导选择角色与岗位目标
-    selected_role = select_role(role)
-    selected_company, selected_target_role = select_target(company, target_role)
-
-    console.print(f"\n[bold green]✔ 面试初始化完毕！[/bold green]")
-    console.print(f"  🏢 目标公司: [bold cyan]{selected_company}[/bold cyan]")
-    console.print(f"  💼 目标岗位: [bold cyan]{selected_target_role}[/bold cyan]")
-    console.print(f"  👤 面试官人设: [bold red]{ROLE_INFO[selected_role]['name']}[/bold red]")
-    console.print(f"  💡 快捷指令: [dim]输入 [yellow]/next[/yellow] 跳过当前阶段，输入 [yellow]/finish[/yellow] 提前交卷出具复盘报告[/dim]\n")
-
-    # 2. 启动面试并流式打出第 1 句开场白
     try:
         if mode not in ("simulation", "practice"):
             raise ValueError("mode 必须为 simulation 或 practice。")
-        profile = load_user_profile()
-        job_description = None
-        if jd:
-            from core.workflow import _resolve_jd_text
-            from core.state import JobDescription
-            job_description = JobDescription(
-                company=selected_company, role=selected_target_role, raw_text=_resolve_jd_text(jd),
+        if resume_session:
+            if any(value is not None for value in (role, company, target_role, jd)):
+                raise ValueError("恢复使用原岗位、风格和 JD；背景变化请新建会话。")
+            session = resume_interview(resume_session)
+            stream = None
+        else:
+            selected_role = select_role(role)
+            selected_company, selected_target_role = select_target(company, target_role)
+            profile = load_user_profile()
+            job_description = None
+            if jd:
+                from core.workflow import _resolve_jd_text
+                from core.state import JobDescription
+                job_description = JobDescription(
+                    company=selected_company, role=selected_target_role, raw_text=_resolve_jd_text(jd),
+                )
+            session, stream = start_interview(
+                profile=profile, target_role=selected_target_role,
+                target_company=selected_company, role=selected_role, provider=provider,
+                job_description=job_description, mode=mode,
             )
-        session, stream = start_interview(
-            profile=profile,
-            target_role=selected_target_role,
-            target_company=selected_company,
-            role=selected_role,
-            provider=provider,
-            job_description=job_description,
-            mode=mode,
-        )
-    except (FileNotFoundError, ValueError, RuntimeError) as exc:
-        console.print(
-            Panel(
-                f"[bold red]模拟面试暂未启动[/bold red]\n{exc}",
-                title="配置检查",
-                border_style="red",
-            )
-        )
+    except (FileNotFoundError, ValueError, RuntimeError, OSError) as exc:
+        console.print(Panel(str(exc), title="会话初始化失败", border_style="red"))
         raise typer.Exit(code=2) from None
 
-    # 打印第一阶段徽章
-    render_stage_header(session.current_stage, session.role, selected_company, selected_target_role)
+    console.print(f"\n[bold green]会话已保存：[/bold green]{session.session_id}")
+    console.print(f"目标：{session.target_company} · {session.target_role}（{session.mode}）", markup=False)
+    console.print(f"恢复命令：uv run jobhunt interview --resume-session {session.session_id}", markup=False)
+    console.print("[dim]/next 跳过；/finish 交卷；/pause 暂停；/retry 重试。[/dim]")
+    render_stage_header(session.current_stage, session.role, session.target_company, session.target_role)
 
-    role_color = ROLE_INFO[session.role]["color"]
-    console.print(f"[bold {role_color}]🤖 面试官：[/bold {role_color}]", end="")
-    try:
-        for chunk in stream:
-            console.print(chunk, end="", highlight=False)
-            sys.stdout.flush()
-    except (ValueError, RuntimeError) as exc:
-        console.print(f"\n[bold red]模型调用失败：[/bold red]{exc}")
-        raise typer.Exit(code=2) from None
-    console.print()
+    if stream is not None:
+        display_stream(stream, session, provider)
+    elif not session.is_finished and session.history:
+        console.print(session.history[-1].question, markup=False)
+    if session.pending_request_id:
+        console.print("[yellow]有未完成请求；请 /retry 重试，或 /finish 交卷。[/yellow]")
 
-    # 3. 对话事件主循环 (Turn Loop)
-    while not session.is_finished:
-        # 获取候选人输入
+    while not session.is_finished and not session.is_paused:
         user_answer = get_candidate_input()
         if not user_answer:
             continue
-
         prev_stage = session.current_stage
-
-        # 推进一轮问答
-        step_stream = step_interview_stream(
-            session=session,
-            user_answer=user_answer,
-            profile=profile,
-            provider=provider,
-        )
-
-        # 若进入了新阶段，且面试未结束，打印新阶段徽章
+        stream = step_interview_stream(session, user_answer, provider=provider)
+        display_stream(stream, session, provider)
         if session.current_stage != prev_stage and not session.is_finished:
-            render_stage_header(session.current_stage, session.role, selected_company, selected_target_role)
+            render_stage_header(session.current_stage, session.role, session.target_company, session.target_role)
 
-        console.print(f"\n[bold {role_color}]🤖 面试官：[/bold {role_color}]", end="")
-        try:
-            for chunk in step_stream:
-                console.print(chunk, end="", highlight=False)
-                sys.stdout.flush()
-        except (ValueError, RuntimeError) as exc:
-            console.print(f"\n[bold red]模型调用失败：[/bold red]{exc}")
-            raise typer.Exit(code=2) from None
-        console.print()
+    if session.is_paused:
+        console.print(f"已暂停。恢复：uv run jobhunt interview --resume-session {session.session_id}", markup=False)
+        return
 
-    # 4. 面试结束，调用评估并出具战报
     try:
-        with console.status("[bold green]整场问答结束，大模型委员会正在全景复盘并生成体检报告...[/bold green]"):
+        with console.status("[bold green]正在基于完整问答生成复盘报告...[/bold green]"):
             report, file_path = finish_interview(session=session, provider=provider)
-    except (ValueError, RuntimeError) as exc:
-        console.print(f"[bold red]复盘报告生成失败：[/bold red]{exc}")
+    except (ValueError, RuntimeError, OSError) as exc:
+        console.print(f"[bold red]复盘生成失败，会话仍已保存：[/bold red]{exc}")
+        console.print(f"重试：uv run jobhunt interview --resume-session {session.session_id}", markup=False)
         raise typer.Exit(code=2) from None
-
-    # 5. 渲染精要战报仪表盘
     render_debrief_dashboard(report, file_path)
 
 

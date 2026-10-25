@@ -4,7 +4,9 @@ AI 场景化模拟面试官业务处理器 (Mock Interviewer Handler)
 """
 
 import json
+import hashlib
 import time
+from uuid import uuid4
 from pathlib import Path
 from typing import Generator, Literal
 
@@ -53,6 +55,23 @@ def _mode_instruction(mode: str) -> str:
     return "当前为模拟模式：保持考官视角，不替候选人作答；用户仍可跳过或结束。"
 
 
+def _session_client(session: InterviewSession, provider: str | None) -> LLMClient:
+    client = LLMClient(provider=provider or session.provider_name)
+    config = getattr(client, "config", None)
+    if config is not None:
+        fingerprint = hashlib.sha256(json.dumps({
+            "provider": client.provider_name,
+            "endpoint": client.base_url,
+            "model": config.model,
+        }, sort_keys=True).encode()).hexdigest()
+        if session.model_fingerprint and fingerprint != session.model_fingerprint and provider is None:
+            client.close()
+            raise ValueError("会话模型或端点配置已变化；请明确指定 --provider 后再继续。")
+        session.model_fingerprint = fingerprint
+    session.provider_name = getattr(client, "provider_name", provider or session.provider_name)
+    return client
+
+
 def start_interview(
     profile: UserProfile | None = None,
     target_role: str | None = None,
@@ -62,6 +81,7 @@ def start_interview(
     *,
     job_description: JobDescription | None = None,
     mode: Literal["simulation", "practice"] = "simulation",
+    session_id: str | None = None,
 ) -> tuple[InterviewSession, Generator[str, None, None]]:
     """
     初始化面试会话，并返回 (session 实体, 面试官第一句开场白流式生成器)。
@@ -74,7 +94,7 @@ def start_interview(
 
     # 1. 创建会话实体
     session = InterviewSession(
-        session_id=f"interview_{str(role.value)}_{int(time.time())}",
+        session_id=session_id or f"interview_{uuid4().hex}",
         role=role,
         current_stage=InterviewStage.INTRO,
         target_role=target_role,
@@ -84,7 +104,7 @@ def start_interview(
     )
 
     # 2. 组装开场白消息
-    llm_client = LLMClient(provider=provider)
+    llm_client = _session_client(session, provider)
     system_prompt = (
         f"{INTERVIEWER_PERSONAS[role]}\n\n{FACTUALITY_GUARDRAIL}\n\n"
         f"{_mode_instruction(mode)}\n\n"
@@ -233,7 +253,7 @@ def step_interview_stream(
     messages.append({"role": "user", "content": last_user_content})
 
     # 5. 调大模型流式输出新问题，并在结束时登记新轮次
-    llm_client = LLMClient(provider=provider)
+    llm_client = _session_client(session, provider)
     raw_stream = llm_client.chat_stream(messages=messages)
 
     full_response = []
@@ -258,6 +278,7 @@ def step_interview_stream(
 def finish_interview(
     session: InterviewSession,
     provider: str | None = None,
+    *, report_id: str = "finish",
 ) -> tuple[InterviewEvaluationReport, Path]:
     """
     终结面试，调用大模型生成全维度复盘体检报告，并持久化保存为 Markdown 文件。
@@ -296,17 +317,22 @@ def finish_interview(
     ]
 
     # 3. 结构化反序列化生成报告实体
-    with LLMClient(provider=provider) as llm_client:
+    with _session_client(session, provider) as llm_client:
         report = llm_client.chat_pydantic(
             messages=messages,
             model_class=InterviewEvaluationReport,
         )
+    return report, export_interview_report(session, report, report_id=report_id)
 
-    # 4. 渲染 Markdown 报告
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
+
+def export_interview_report(
+    session: InterviewSession, report: InterviewEvaluationReport, *, report_id: str = "finish",
+) -> Path:
+    """从已校验的完整记录导出报告；重放或补回丢失的文件不需要请求模型。"""
     report_dir = PROJECT_ROOT / "storage" / "interview_logs"
     report_dir.mkdir(parents=True, exist_ok=True)
-    file_path = report_dir / f"interview_report_{session.role.value}_{timestamp}.md"
+    session_tag = hashlib.sha256(json.dumps([session.session_id, report_id]).encode()).hexdigest()[:16]
+    file_path = report_dir / f"interview_report_{session.role.value}_{session_tag}.md"
 
     # 格式化维度评分表
     dim_rows = []
@@ -392,7 +418,9 @@ def finish_interview(
 {transcript_full_str}
 """
 
-    file_path.write_text(md_content, encoding="utf-8")
+    temporary = file_path.with_suffix(".tmp")
+    temporary.write_text(md_content, encoding="utf-8")
+    temporary.replace(file_path)
     report.report_file_path = str(file_path)
 
-    return report, file_path
+    return file_path

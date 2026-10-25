@@ -39,7 +39,7 @@ def profile():
 
 
 @pytest.fixture(autouse=True)
-def protect_private_data_and_network(monkeypatch):
+def protect_private_data_and_network(monkeypatch, tmp_path):
     read_yaml = config._read_yaml_file
 
     def guarded_read(path):
@@ -53,6 +53,12 @@ def protect_private_data_and_network(monkeypatch):
 
     monkeypatch.setattr(config, "_read_yaml_file", guarded_read)
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", no_network)
+    from skills.mock_interviewer import handler as interview
+    from skills.mock_interviewer import session_store
+    from tools import github_client
+    monkeypatch.setattr(interview, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(session_store, "DEFAULT_DB_PATH", tmp_path / "interviews.db")
+    monkeypatch.setattr(github_client, "DEFAULT_CACHE_PATH", tmp_path / "github_cache.db")
 
 
 @pytest.fixture
@@ -122,3 +128,54 @@ def llm_stub():
                 raise type(self).stream_error
 
     return Stub
+
+
+@pytest.fixture
+def interview_env(profile, llm_stub, monkeypatch):
+    from core.state import InterviewEvaluationReport
+    from skills.mock_interviewer import handler
+    from skills.mock_interviewer.session_store import InterviewStore
+    monkeypatch.setattr(handler, "LLMClient", llm_stub)
+    monkeypatch.setattr(handler, "load_user_profile", lambda: profile)
+    llm_stub.responder = lambda messages, model: InterviewEvaluationReport(
+        overall_score=0, result="证据不足", summary="合成复盘，尚未观察到全部能力", dimension_scores={},
+    )
+    return InterviewStore(), llm_stub
+
+
+@pytest.fixture
+def interview_mcp_params(mcp_server_params):
+    """多个 MCP 子进程复用同一临时目录；离线模型只写合成调用计数。"""
+    fake_model = '''
+from types import SimpleNamespace
+from skills.mock_interviewer import handler as interview
+class OfflineModel:
+    def __init__(self, provider=None):
+        self.provider_name = provider or "offline"
+        self.base_url = "https://offline.invalid/v1"
+        self.config = SimpleNamespace(model="synthetic_model")
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        self.close()
+    def close(self):
+        pass
+    def record(self, kind):
+        with (config.PROJECT_ROOT / "model_calls.txt").open("a", encoding="utf-8") as handle:
+            handle.write(kind + "\\n")
+    def chat_stream(self, messages, **kwargs):
+        self.record("stream")
+        flag = config.PROJECT_ROOT / "failed_once"
+        if any("TRIGGER_STREAM_FAILURE" in item["content"] for item in messages) and not flag.exists():
+            flag.touch()
+            yield "失败问题片段"
+            raise RuntimeError("synthetic interruption")
+        yield "离线完整问题"
+    def chat_pydantic(self, messages, model_class, **kwargs):
+        self.record("report")
+        return model_class(overall_score=0, result="证据不足", summary="合成复盘")
+interview.LLMClient = OfflineModel
+'''
+    params = mcp_server_params.model_copy(deep=True)
+    params.args[3] = params.args[3].replace("from adapters.mcp_server import main", fake_model + "\nfrom adapters.mcp_server import main")
+    return params

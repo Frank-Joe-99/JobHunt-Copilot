@@ -544,6 +544,11 @@ class InterviewSession(BaseModel):
     is_finished: bool = Field(False, description="整场面试是否已完成")
     job_description: JobDescription | None = None
     mode: Literal["simulation", "practice"] = "simulation"
+    revision: int = 0
+    is_paused: bool = False
+    provider_name: str | None = None
+    model_fingerprint: str | None = None
+    pending_request_id: str | None = None
 
 
 class InterviewEvaluationReport(BaseModel):
@@ -562,6 +567,26 @@ class InterviewEvaluationReport(BaseModel):
         description="针对失分问题的标准满分回答示范 [{'question': '...', 'ideal_answer': '...'}]"
     )
     report_file_path: str = Field("", description="保存到本地的 Markdown 复盘报告物理路径")
+
+
+class StoredInterview(BaseModel):
+    session: InterviewSession
+    profile: UserProfile
+    profile_hash: str
+    updated_at: float
+
+
+class InterviewRequest(BaseModel):
+    request_id: str
+    operation: Literal["opening", "answer", "finish"]
+    input_text: str
+    status: Literal["pending", "completed", "failed", "cancelled"]
+    output_text: str = ""
+    result_session: InterviewSession | None = None
+    report: InterviewEvaluationReport | None = None
+    report_path: str | None = None
+    error_code: str | None = None
+    attempts: int = 1
 
 
 # ==============================================================================

@@ -111,5 +111,5 @@ def test_mcp_interview_old_and_optional_arguments(profile, llm_stub, monkeypatch
     assert second["status"] == "success"
     prompt = llm_stub.calls[-1]["messages"][0]["content"]
     assert "React 测试 JD" in prompt and "训练模式" in prompt
-    # M07 尚未实施，但测试不依赖同秒会话 ID 的唯一性。
+    assert first["session_id"] != second["session_id"]
     mcp_server._interview_sessions.clear()

@@ -68,9 +68,15 @@
 ### 4. 场景化模拟面试
 | 工具名称 | 注解属性 | 功能说明 | 关键输入参数 |
 | :--- | :--- | :--- | :--- |
-| `tool_interview_start` | 状态写入 | 创建面试会话并返回 `session_id`，支持可选 JD 和模拟/训练模式 | `target_company`, `target_role`, `interviewer_role`, `jd_text`（可选）, `mode`（默认 `simulation`） |
-| `tool_interview_answer` | 状态写入 | 提交应答，驱动状态机推演并获取面试官追问（支持 `next`/`finish`） | `session_id`, `user_answer` |
-| `tool_interview_finish` | 写入·完结 | 结束面试，生成六维能力复盘报告并持久化为 Markdown 文件 | `session_id` |
+| `tool_interview_start` | 状态写入 | 创建或恢复私有会话，返回 `session_id`；恢复沿用原快照与岗位，不调用模型 | 原参数继续可用；`resume_session_id`（可选，恢复已有会话） |
+| `tool_interview_answer` | 状态写入 | 保存回答后生成追问；支持 `next`/`finish`/`pause`/`retry` | `session_id`, `user_answer`, `request_id`（可选） |
+| `tool_interview_finish` | 写入·完结 | 结束问答并生成报告；相同请求跨重启重放报告，不再调用模型 | `session_id`, `request_id`（默认 `finish`） |
+
+仍为 13 个工具，旧参数和成功返回字段兼容。会话保存在独立 `storage/interviews.db`，CLI 与 MCP 共用 `core/interview_service.py`；进程内缓存不是状态来源。新返回字段包括 `revision`、`is_paused` 和 `pending_request_id`。
+
+作答时建议由宿主生成 `request_id`，同一次作答重试必须沿用该 ID 和完全相同的输入；相同 ID 的完整结果直接重放，旧结果不会覆盖数据库中的新阶段。回放旧结果后，先恢复读取当前会话再回答后续问题。未传 ID 的旧用法继续可用，但无法区分“已成功回答的网络重发”和“有意重复相同回答”。`/retry` 自动使用未完成请求原文和原 ID。`/pause` 后用 start 的 `resume_session_id` 恢复。
+
+开场或追问失败会返回 `status="recoverable_error"`，保留会话 ID、待重试 ID 和安全的错误类型；部分问题不进入正式记录。结束问答后即使复盘失败，也可再次调用 finish 重试。默认完成的报告支持重复读取；显式传不同报告 ID 会生成独立报告。查看和删除会话可使用 `uv run jobhunt interview-sessions list|show|delete`，详见主 README。
 
 ---
 
