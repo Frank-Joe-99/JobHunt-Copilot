@@ -1,149 +1,155 @@
-"""
-开源实战项目推荐与技能补短板业务调度器 (Project Recommender Handler)
-根据技能差距清单，智能检索 GitHub 开源仓库，并由 LLM 挑选优质练手项目并生成简历 STAR 范文。
-"""
+"""根据已确认缺口推荐公开项目；网络预算与证据由应用层约束。"""
 
 import json
 import logging
 import re
-from core.state import SkillGap, ProjectRecommendation, ProjectRecommendationReport
-from tools.github_client import GitHubClient, GitHubRepo
-from tools.llm_client import LLMClient
+
+from core.state import (
+    ProjectRecommendation, ProjectRecommendationReport, RepositoryEvidence, SkillGap,
+)
 from skills.project_recommender.prompt import PROJECT_EVAL_SYSTEM
+from tools.github_client import GitHubClient, GitHubRepo, GitHubUnavailable
+from tools.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
+STAR_TEMPLATE = (
+    "【仅供完成项目后填写，不可直接作为已完成经历投递】"
+    "背景：[实际问题与目标]；行动：[本人实际完成的模块与贡献]；"
+    "结果：[可复现的实测结果及测试口径；没有数据时如实描述，不编造指标]。"
+)
 
 
 def _extract_search_terms(skill_text: str) -> list[str]:
-    """从技能描述中提取适合 GitHub 搜索的核心英文技术词汇，例如 '分布式消息队列 Kafka' -> ['Kafka']"""
-    # 提取英文技术词（包含字母、数字、特定符号如 C++, C#）
-    english_terms = re.findall(r"[A-Za-z0-9+#.-]+", skill_text)
-    # 过滤过短或通用无效词汇
+    terms = re.findall(r"[A-Za-z0-9+#.-]+", skill_text)
     ignored = {"and", "or", "the", "in", "of", "to", "for", "with", "a", "an"}
-    filtered = [t for t in english_terms if len(t) > 1 and t.lower() not in ignored]
-    return filtered if filtered else [skill_text.strip()]
+    return [term for term in terms if len(term) > 1 and term.lower() not in ignored] or [skill_text.strip()]
 
 
 def recommend_projects_report(
-    skills_gaps: list[SkillGap],
-    language: str | None = "python",
-    provider: str | None = None,
+    skills_gaps: list[SkillGap], language: str | None = "python", provider: str | None = None,
 ) -> ProjectRecommendationReport:
-    """
-    根据技能缺口列表，搜索并推荐适合练手的 GitHub 开源项目，返回完整报告。
-
-    Args:
-        skills_gaps: 技能差距清单 (SkillGap 列表)
-        language: 偏好的编程语言 (默认 python)
-        provider: 大模型供应商名称
-    """
-    # 1. 过滤出存在缺口的技能 (missing 或 partial)
-    target_gaps = [gap for gap in skills_gaps if gap.status in ("missing", "partial")]
-    if not target_gaps:
+    gaps = [gap for gap in skills_gaps if gap.status in ("missing", "partial")]
+    if not gaps:
         return ProjectRecommendationReport(
-            overview="暂无已确认的技能缺口；未提供证据的技能需先澄清，不直接判为不会。",
-            recommendations=[],
+            status="no_gaps", overview="暂无已确认的技能缺口；未提供证据的技能需先澄清，不直接判为不会。",
         )
-
-    github = GitHubClient()
-    llm = LLMClient(provider=provider)
-
-    # 2. 针对各个技能缺口，逐项检索 GitHub 仓库并去重
-    candidate_repos: list[GitHubRepo] = []
-    seen_names: set[str] = set()
-
-    for gap in target_gaps:
-        terms = _extract_search_terms(gap.skill)
-        # 用提取到的核心技术词（如 Kafka, Redis）进行针对性搜索
-        search_query_terms = terms[:2] if terms else [gap.skill]
-        
-        try:
-            repos = github.search_repos(
-                keywords=search_query_terms,
-                language=language,
-                min_stars=200,
-                max_stars=15000,
-                per_page=4,
-            )
-            for r in repos:
-                if r.full_name not in seen_names:
-                    seen_names.add(r.full_name)
-                    candidate_repos.append(r)
-        except Exception as e:
-            # 单个关键词搜索失败时降级容错，记录提示并继续流程
-            if "403" in str(e):
-                logger.warning("GitHub API 触发未认证请求速率限制 (403)，可在 config/settings.yaml 配置 github.token 提升配额。")
-            else:
-                logger.warning("检索开源项目异常 (%s)", type(e).__name__)
-            continue
-
-    # 如果有语言限定且结果较少，尝试不限语言兜底搜索一次
-    if len(candidate_repos) < 2 and language:
-        for gap in target_gaps[:2]:
-            terms = _extract_search_terms(gap.skill)
+    try:
+        github = GitHubClient()
+    except (ValueError, OSError, RuntimeError):
+        return ProjectRecommendationReport(
+            status="unavailable", degraded=True, notices=["github_configuration"],
+            overview="项目检索配置暂不可用，已跳过推荐；不代表没有技能缺口。",
+        )
+    candidates: dict[str, GitHubRepo] = {}
+    readmes = {}
+    with github:
+        for gap in gaps:
+            if github.monotonic() - github.started_at >= github.config.total_timeout_seconds:
+                github._note("time_budget")
+                break
             try:
                 repos = github.search_repos(
-                    keywords=terms[:1] if terms else [gap.skill],
-                    language=None,
-                    min_stars=300,
-                    per_page=3,
+                    _extract_search_terms(gap.skill)[:2], language=language,
+                    min_stars=200, max_stars=15000, per_page=4,
                 )
-                for r in repos:
-                    if r.full_name not in seen_names:
-                        seen_names.add(r.full_name)
-                        candidate_repos.append(r)
-            except Exception as e:
-                if "403" in str(e):
-                    logger.warning("GitHub API 触发未认证请求速率限制 (403)。")
+                for repo in repos:
+                    candidates.setdefault(repo.full_name.casefold(), repo)
+            except GitHubUnavailable:
+                continue
+        if len(candidates) < 2 and language:
+            for gap in gaps[:2]:
+                try:
+                    for repo in github.search_repos(
+                        _extract_search_terms(gap.skill)[:1], language=None,
+                        min_stars=300, per_page=3,
+                    ):
+                        candidates.setdefault(repo.full_name.casefold(), repo)
+                except GitHubUnavailable:
+                    continue
+
+        selected = list(candidates.values())[:10]
+        for repo in selected[:github.config.max_readmes]:
+            try:
+                readmes[repo.full_name.casefold()] = github.get_readme(repo.full_name)
+            except GitHubUnavailable:
                 continue
 
-    if not candidate_repos:
-        return ProjectRecommendationReport(
-            overview="未能检索到与当前缺口匹配的合适开源项目，建议调整技能关键词后重试。",
-            recommendations=[],
-        )
+        def finish(report: ProjectRecommendationReport):
+            report.request_count = github.request_count
+            report.cache_hits = github.cache_hits
+            report.notices = list(dict.fromkeys([*report.notices, *github.notices]))
+            report.degraded = report.degraded or bool(report.notices)
+            return report
 
-    # 3. 构造大模型提示词，挑选最具价值的 2~4 个项目并深度解析
-    user_payload = {
-        "missing_skill_gaps": [
-            {"skill": g.skill, "status": g.status, "suggestion": g.suggestion}
-            for g in target_gaps
-        ],
-        "candidate_github_repositories": [
-            {
-                "full_name": r.full_name,
-                "html_url": r.html_url,
-                "stars": r.stargazers_count,
-                "language": r.language,
-                "description": r.description,
-                "topics": r.topics,
-            }
-            for r in candidate_repos[:10]  # 最多送入 10 个候选供模型精挑细选
-        ],
-    }
+        if not selected:
+            unavailable = bool(github.notices)
+            return finish(ProjectRecommendationReport(
+                status="unavailable" if unavailable else "no_match",
+                overview="项目资料服务不可用，已跳过推荐。" if unavailable else "未找到合适的公开项目。",
+            ))
 
-    messages = [
-        {"role": "system", "content": PROJECT_EVAL_SYSTEM},
-        {
-            "role": "user",
-            "content": f"请针对以下技能缺口与候选 GitHub 仓库进行智能筛选评估，并输出推荐方案：\n{json.dumps(user_payload, ensure_ascii=False, indent=2)}",
-        },
-    ]
+        payload = {
+            "missing_skill_gaps": [gap.model_dump() for gap in gaps],
+            "candidate_github_repositories": [
+                {
+                    **repo.model_dump(),
+                    "readme": readmes[repo.full_name.casefold()].model_dump()
+                    if repo.full_name.casefold() in readmes else None,
+                } for repo in selected
+            ],
+        }
+        try:
+            with LLMClient(provider=provider) as llm:
+                report = llm.chat_pydantic([
+                    {"role": "system", "content": PROJECT_EVAL_SYSTEM},
+                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False, indent=2)},
+                ], ProjectRecommendationReport)
+        except (ValueError, RuntimeError):
+            return finish(ProjectRecommendationReport(
+                status="unavailable", degraded=True, notices=["evaluation_unavailable"],
+                overview="公开资料已取得，但推荐评估暂不可用；已跳过推荐，不代表缺口已消失。",
+            ))
 
-    return llm.chat_pydantic(messages, ProjectRecommendationReport)
+        grounded = []
+        seen = set()
+        for item in report.recommendations[:4]:
+            key = item.repo_name.casefold()
+            repo = candidates.get(key)
+            if repo is None or key in seen:
+                github._note("invalid_recommendation")
+                continue
+            seen.add(key)
+            item.repo_name, item.repo_url = repo.full_name, repo.html_url
+            item.stars, item.language = repo.stargazers_count, repo.language
+            item.star_resume_sample = STAR_TEMPLATE
+            item.evidence = [RepositoryEvidence(
+                kind="metadata", source_url=repo.html_url, fetched_at=repo.fetched_at,
+                cache_status=repo.cache_status,
+            )]
+            readme = readmes.get(key)
+            allowed_paths = set()
+            if readme:
+                allowed_paths.add(readme.path)
+                item.evidence.append(RepositoryEvidence(
+                    kind="readme", source_url=readme.html_url, source_version=readme.sha,
+                    fetched_at=readme.fetched_at, cache_status=readme.cache_status,
+                ))
+            references = re.findall(
+                r"(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+|"
+                r"[A-Za-z0-9_.-]+\.(?:py|md|cpp|cc|h|hpp|js|ts|tsx|jsx|go|rs|java)\b",
+                item.learning_path,
+            )
+            if any(path.removeprefix("./") not in allowed_paths for path in references):
+                item.learning_path = "先从公开说明确认与技能缺口相关的模块入口，再完成一个可验证的小练习。"
+                github._note("unverified_path_removed")
+            item.learning_path += "（源码学习计划待验证；仅所列 README 引用有读取证据。）"
+            grounded.append(item)
+        report.recommendations = grounded
+        report.status = "completed" if grounded else "no_match"
+        return finish(report)
 
 
 def recommend_projects(
-    skills_gaps: list[SkillGap],
-    language: str | None = "python",
-    provider: str | None = None,
+    skills_gaps: list[SkillGap], language: str | None = "python", provider: str | None = None,
 ) -> list[ProjectRecommendation]:
-    """
-    向后兼容的主入口函数：输入技能缺口，直接返回精选的项目推荐列表。
-    """
-    report = recommend_projects_report(
-        skills_gaps=skills_gaps,
-        language=language,
-        provider=provider,
-    )
-    return report.recommendations
+    return recommend_projects_report(skills_gaps, language, provider).recommendations

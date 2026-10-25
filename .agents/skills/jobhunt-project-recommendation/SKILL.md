@@ -5,6 +5,8 @@ description: Recommend GitHub learning projects and a skill-gap study path using
 
 # JobHunt Project Recommendation
 
+Recommendations report status, network/cache counts, and dated public evidence. Check stale-cache markers before describing stars as current. Only the fetched README has file-level evidence; do not describe arbitrary source paths as verified. Offline GitHub cache mode does not disable the separate LLM provider. A skipped/unavailable recommendation is not proof that the candidate has no skill gaps.
+
 1. Identify skill gaps from the supplied JD or a prior JD-match result. Ask for a target role or preferred language only if needed; otherwise make assumptions explicit.
 2. Call `skills.project_recommender.handler.recommend_projects_report` with `core.state.SkillGap` items and the preferred language.
 3. Summarize why each repository fits, the exact learning path, likely interview follow-ups, and how the work could become candidate evidence only after the user actually completes it.

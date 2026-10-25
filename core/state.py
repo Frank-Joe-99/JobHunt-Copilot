@@ -316,6 +316,17 @@ class GithubConfig(BaseModel):
     GitHub API 客户端配置
     """
     token: str = Field("", description="GitHub 访问 Token（选填，用于提升 API 速率限制）")
+    offline: bool = Field(False, description="仅禁止 GitHub 网络请求，不代表整个应用离线")
+    max_requests: int = Field(6, ge=0, le=100)
+    max_search_requests: int = Field(3, ge=0, le=30)
+    max_readmes: int = Field(2, ge=0, le=10)
+    request_timeout_seconds: float = Field(8, gt=0, le=60)
+    total_timeout_seconds: float = Field(20, gt=0, le=120)
+    max_response_bytes: int = Field(512000, gt=0)
+    max_download_bytes: int = Field(1500000, gt=0)
+    readme_excerpt_chars: int = Field(6000, gt=0, le=30000)
+    cache_ttl_seconds: int = Field(86400, ge=0)
+    max_stale_seconds: int = Field(604800, ge=0)
 
 
 class AppSettings(BaseModel):
@@ -425,6 +436,14 @@ class JobMatchEvaluation(BaseModel):
     match: MatchResult
 
 
+class RepositoryEvidence(BaseModel):
+    kind: Literal["metadata", "readme"]
+    source_url: str
+    fetched_at: str
+    cache_status: Literal["network", "fresh", "stale"]
+    source_version: str | None = None
+
+
 class ProjectRecommendation(BaseModel):
     """单个开源项目推荐条目"""
     repo_name: str                  # 仓库全名 owner/repo
@@ -436,6 +455,7 @@ class ProjectRecommendation(BaseModel):
     learning_path: str              # 学习路径：重点看哪几个文件/模块
     interview_tips: str             # 面试考点：可能会追问的问题
     star_resume_sample: str         # 项目完成后填写的 STAR 模板；不得当作已完成经历或编造指标
+    evidence: list[RepositoryEvidence] = Field(default_factory=list)
 
 
 class ProjectRecommendationReport(BaseModel):
@@ -444,6 +464,11 @@ class ProjectRecommendationReport(BaseModel):
     recommendations: list[ProjectRecommendation] = Field(
         default_factory=list, description="精选推荐的开源项目列表"
     )
+    status: Literal["completed", "disabled", "unavailable", "no_match", "no_gaps"] = "completed"
+    degraded: bool = False
+    notices: list[str] = Field(default_factory=list)
+    request_count: int = 0
+    cache_hits: int = 0
 
 
 # ==============================================================================

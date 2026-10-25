@@ -95,16 +95,35 @@ def _build_package_markdown(
     if project_report and project_report.recommendations:
         proj_recs_md = []
         for idx, r in enumerate(project_report.recommendations, start=1):
+            evidence_text = "；".join(
+                f"{e.kind} · {e.fetched_at} · {e.cache_status} · {e.source_url}"
+                for e in r.evidence
+            )
             proj_recs_md.append(
                 f"### {idx}. [{r.repo_name}]({r.repo_url}) (⭐ {r.stars})\n"
                 f"- **推荐理由**：{r.why_recommended}\n"
                 f"- **学习攻坚路径**：{r.learning_path}\n"
                 f"- **面试高频考点**：{r.interview_tips}\n"
+                f"- **资料来源**：{evidence_text or '未提供验证资料'}\n"
                 f"> **简历 STAR 转化范文**：\n>\n> {r.star_resume_sample}\n"
             )
         project_section_str = "\n".join(proj_recs_md)
     else:
-        project_section_str = "未生成开源推荐（可能已关闭、服务不可用或没有合适结果）。请结合技能缺口判断，不代表已覆盖所有要求。"
+        status = project_report.status if project_report else "unavailable"
+        project_section_str = {
+            "disabled": "用户已关闭开源推荐。",
+            "unavailable": "服务不可用，已跳过推荐；请结合技能缺口判断。",
+            "no_match": "未找到合适的公开项目；请调整搜索条件。",
+            "no_gaps": "暂无已确认缺口；未提供证据的部分仍需核实。",
+        }.get(status, "本次未生成有效推荐。")
+
+    if project_report:
+        project_section_str = (
+            f"推荐状态：{project_report.status}；网络请求 {project_report.request_count} 次，"
+            f"缓存命中 {project_report.cache_hits} 次。\n\n" + project_section_str
+        )
+        if project_report.notices:
+            project_section_str += "\n\n降级说明：" + "、".join(project_report.notices)
 
     # 3. 润色提分条目
     if polish_report and polish_report.items:
@@ -241,7 +260,12 @@ def tailor_application_flow(
             logger.info(f"  └─ 已智能推荐 {len(project_report.recommendations)} 个开源实战补强项目")
         except Exception as e:
             logger.warning("开源推荐不可用，主流程继续 (%s)", type(e).__name__)
+            project_report = ProjectRecommendationReport(status="unavailable", overview="服务不可用，已跳过推荐。")
     else:
+        project_report = ProjectRecommendationReport(
+            status="disabled" if not enable_github_search else "no_gaps",
+            overview="用户关闭推荐" if not enable_github_search else "暂无已确认的缺口",
+        )
         if progress_callback:
             progress_callback(2, 5, "无显著技能缺口或已跳过开源项目检索。")
         logger.info("[Step 2/5] 无显著技能缺口或已跳过开源项目检索。")

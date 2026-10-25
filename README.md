@@ -87,6 +87,8 @@ uv run python -X utf8 check_config.py
 
 定制润色接收完整 JD 与匹配建议，按快照内 ID 修改指定亮点。检测到新增数字、技术名、职责扩大或完成状态疑点的建议会标为待核实并保留原文；机器检查不证明语义真实性。成品按草稿交付，生成物料不代表实际投递。
 
+开源推荐使用 `storage/github_cache.db` 缓存公开元数据与 README，受请求次数、下载量和总耗时限制。默认最多补取 2 份 README；搜索可用可选 Token，README 匿名读取以避免缓存私有内容。无网/限流可回退到带获取日期的缓存，或跳过推荐继续生成简历。报告区分关闭、不可用、无合适结果和完成推荐，不把过期星数当实时数据。可调整项见 `config/settings.example.yaml` 的 `github` 段。
+
 ---
 
 ### 2. 全真 AI 场景化模拟面试 (`jobhunt interview`)

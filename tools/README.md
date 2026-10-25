@@ -1,5 +1,7 @@
 # 🔧 tools/ 目录：底层基础设施与外设驱动层
 
+`GitHubClient` 提供公开资料缓存、网络/搜索/README 次数预算、响应大小和总耗时预算。构造参数可注入配置、缓存路径、HTTP transport 和时钟用于离线测试；旧的无参构造与 `search_repos()` 参数保留。缓存不保存搜索词明文、档案、JD 或认证信息。限流使用响应头与持久冷却时间，不循环重试；403 权限错误与 429/配额耗尽分别处理。README 的版本为内容 blob SHA，不冒充提交 SHA，引用使用对应 Git blob URL。
+
 模型能力配置新增 `supports_temperature`、可空的 `temperature`、`token_limit_parameter`、`output_token_limit`、`context_char_limit` 和 `supports_json_mode`，见 `config/settings.example.yaml`。只修改本地配置时才影响具体端点；不按模型名称猜测能力。输入按字符预算检查，超限明确报错而不裁掉经历；输出不再统一截为 8192。
 
 `chat()` 仍返回字符串，`chat_stream()` 仍返回字符串生成器。调用状态通过 `last_response` 暴露（包括结束原因、HTTP 状态、用量和 JSON 修复标记，不含正文）。拒绝、截断、缺少正常结束原因和流中断会报错；经过结构修复的 JSON 不直接作为正式 Pydantic 业务结果。原生 schema 与分层自动降级留待 M08，不在本批实施。
