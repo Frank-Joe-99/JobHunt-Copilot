@@ -8,9 +8,7 @@ from datetime import datetime
 import logging
 from pathlib import Path
 
-from core.config import load_user_profile
-from core.state import UserProfile, RankedOpportunity, JobRadarReport
-from skills.jd_matcher.handler import parse_jd, match_profile_with_jd
+from core.state import UserProfile, RankedOpportunity, JobRadarReport, JobMatchEvaluation
 
 logger = logging.getLogger(__name__)
 
@@ -43,78 +41,39 @@ def _analyze_common_gaps(opportunities: list[RankedOpportunity]) -> list[dict[st
     return result
 
 
+def rank_evaluations(evaluations: list[JobMatchEvaluation]) -> list[RankedOpportunity]:
+    ranked = []
+    for evaluation in sorted(evaluations, key=lambda item: item.match.score, reverse=True):
+        job, match = evaluation.job, evaluation.match
+        tier, verdict = _determine_tier_and_verdict(match.score)
+        ranked.append(RankedOpportunity(
+            rank=len(ranked) + 1, company=job.company, role=job.role, department=job.department,
+            score=match.score, tier=tier, verdict=verdict,
+            top_matches=[item.skill for item in match.matched_skills[:3]],
+            key_gaps=[item.skill for item in match.missing_skills[:3]],
+            overview=match.overview, tuning_advice=match.resume_tuning_advice,
+        ))
+    return ranked
+
+
 def scan_opportunities(
-    jd_texts: list[str],
-    profile: UserProfile | None = None,
-    provider: str | None = None,
+    jd_texts: list[str], profile: UserProfile | None = None, provider: str | None = None,
 ) -> list[RankedOpportunity]:
-    """
-    核心入口 1：接收 JD 纯文本列表，批量解析打分并按匹配度降序返回排名列表。
-
-    Args:
-        jd_texts: 原始岗位 JD 文本字符串列表
-        profile: 候选人档案（若不传自动从 config/profile.yaml 读取）
-        provider: 大模型供应商名称 (如 deepseek, openai)
-    """
-    if not jd_texts:
-        return []
-
-    if profile is None:
-        profile = load_user_profile()
-
-    evaluated: list[tuple[int, RankedOpportunity]] = []
-
-    for idx, raw_text in enumerate(jd_texts, start=1):
-        clean_text = raw_text.strip()
-        if not clean_text:
-            continue
-
-        try:
-            # 1. 结构化解析 JD
-            parsed_jd = parse_jd(clean_text, provider=provider)
-            # 2. 深度穿透比对
-            match_res = match_profile_with_jd(profile, parsed_jd, provider=provider)
-
-            tier, verdict = _determine_tier_and_verdict(match_res.score)
-
-            opp = RankedOpportunity(
-                rank=0,  # 稍后排序后统一赋予排名序号
-                company=parsed_jd.company,
-                role=parsed_jd.role,
-                department=parsed_jd.department,
-                score=match_res.score,
-                tier=tier,
-                verdict=verdict,
-                top_matches=[s.skill for s in match_res.matched_skills[:3]],
-                key_gaps=[s.skill for s in match_res.missing_skills[:3]],
-                overview=match_res.overview,
-                tuning_advice=match_res.resume_tuning_advice,
-            )
-            evaluated.append((match_res.score, opp))
-        except Exception as e:
-            # 单份 JD 解析失败不阻断整批任务
-            logger.warning(f"第 {idx} 份岗位描述分析失败，已跳过: {e}")
-            continue
-
-    # 按分数从高到低排序
-    evaluated.sort(key=lambda item: item[0], reverse=True)
-
-    ranked_list: list[RankedOpportunity] = []
-    for rank_idx, (_, opp) in enumerate(evaluated, start=1):
-        opp.rank = rank_idx
-        ranked_list.append(opp)
-
-    return ranked_list
+    """保留旧入口；跨模块业务协调在 core/radar_workflow.py。"""
+    from core.radar_workflow import scan_opportunities as run
+    return run(jd_texts, profile, provider)
 
 
 def scan_from_directory(
-    dir_path: str | Path = "storage/raw_jds",
-    profile: UserProfile | None = None,
+    dir_path: str | Path = "storage/raw_jds", profile: UserProfile | None = None,
     provider: str | None = None,
 ) -> list[RankedOpportunity]:
-    """
-    核心入口 2：从指定本地文件夹中批量读取所有 .txt 岗位文本并进行雷达扫描。
-    """
+    from core.radar_workflow import scan_from_directory as run
+    return run(dir_path, profile, provider)
+
+
+def read_jd_texts(dir_path: str | Path) -> list[str]:
+    """只读取目录，不调用其他业务模块。"""
     target_dir = Path(dir_path)
     if not target_dir.is_absolute():
         target_dir = PROJECT_ROOT / target_dir
@@ -140,7 +99,7 @@ def scan_from_directory(
         if content and content.strip():
             jd_texts.append(content)
 
-    return scan_opportunities(jd_texts, profile=profile, provider=provider)
+    return jd_texts
 
 
 def export_radar_report(
@@ -266,6 +225,6 @@ def run_radar_pipeline(
     """
     一键门面快捷函数：扫描文件夹 -> 批量比对 -> 自动导出 Markdown 战略报告。
     """
-    opportunities = scan_from_directory(dir_path=dir_path, profile=profile, provider=provider)
-    return export_radar_report(opportunities)
+    from core.radar_workflow import run_radar_pipeline as run
+    return run(dir_path, profile, provider)
 
