@@ -398,6 +398,13 @@ def tool_interview_start(
     jd_text: str | None = None,
     mode: Literal["simulation", "practice"] = "simulation",
     resume_session_id: str | None = None,
+    flow: Literal["fixed", "adaptive"] = "fixed",
+    max_turns: int | None = None,
+    max_duration_seconds: float | None = None,
+    max_followups: int | None = None,
+    max_requests_per_turn: int | None = None,
+    max_requests_total: int | None = None,
+    request_timeout_seconds: float | None = None,
 ) -> str:
     """
     初始化一场沉浸式 AI 模拟面试会话。
@@ -409,23 +416,36 @@ def tool_interview_start(
         interviewer_role: 面试官人设 (strict_architect: 硬核架构师 / practical_lead: 实战带教组长 / hrbp: 敏锐HRBP)
         provider: 可选的大模型供应商
         resume_session_id: 恢复已有会话，使用原岗位、事实快照及模式；不请求模型
+        flow: fixed 为兼容流式，adaptive 为单次决策试验，完整校验后显示问题
+        max_turns: 可选交互轮数上限，含开场；反问结束回应不新增问题轮数
+        max_duration_seconds: 有效面试秒数上限，不计暂停时间
+        max_followups: 自适应连续追问上限
+        max_requests_per_turn: 每轮模型 HTTP 请求上限，默认自适应为 1
+        max_requests_total: 整场问答请求上限，复盘另计
+        request_timeout_seconds: 单轮生成限时
 
     Returns:
         JSON 包含 session_id、面试官第一句开场白及当前阶段
     """
     from core.interview_service import resume_interview, start_interview
-    from core.state import InterviewRole, JobDescription
+    from core.state import InterviewPolicy, InterviewRole, JobDescription
 
     error_code = None
     if resume_session_id:
         session = resume_interview(resume_session_id)
         opening_question = session.history[-1].question if session.history else ""
     else:
+        policy_values = {key: value for key, value in {
+            "max_turns": max_turns, "max_duration_seconds": max_duration_seconds,
+            "max_followups": max_followups, "max_requests_per_turn": max_requests_per_turn,
+            "max_requests_total": max_requests_total, "request_timeout_seconds": request_timeout_seconds,
+        }.items() if value is not None}
         session, stream = start_interview(
             target_role=target_role, target_company=target_company,
             role=InterviewRole(interviewer_role), provider=provider,
             job_description=JobDescription(company=target_company, role=target_role, raw_text=jd_text) if jd_text else None,
             mode=mode,
+            flow=flow, policy=InterviewPolicy(**policy_values) if policy_values or flow == "adaptive" else None,
         )
         try:
             opening_question = "".join(stream).strip()
@@ -441,6 +461,8 @@ def tool_interview_start(
             "target_company": session.target_company,
             "target_role": session.target_role,
             "interviewer_role": session.role.value,
+            "flow": session.flow,
+            "policy": session.policy.model_dump() if session.enforce_policy else None,
             "current_stage": session.current_stage.value,
             "opening_question": opening_question,
             "is_finished": session.is_finished,
@@ -504,6 +526,10 @@ def tool_interview_answer(
             "revision": session.revision,
             "pending_request_id": session.pending_request_id,
             "request_id": request_id,
+            "flow": session.flow,
+            "stop_reason": session.stop_reason,
+            "policy_notice": pending.metrics.policy_reason if pending else None,
+            "metrics": InterviewStore().statistics(session_id),
             "error_code": error_code,
             "message": "请求未完成；可恢复会话后 /retry，或结束生成报告。" if error_code else "本次请求已完成。",
             "interviewer_reply": interviewer_reply,

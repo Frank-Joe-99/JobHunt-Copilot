@@ -15,6 +15,8 @@ from core.context import candidate_context
 from core.state import (
     JobDescription,
     InterviewEvaluationReport,
+    InterviewPolicy,
+    InterviewRequestMetrics,
     InterviewRole,
     InterviewSession,
     InterviewStage,
@@ -29,6 +31,8 @@ from skills.mock_interviewer.prompt import (
     STAGE_GUIDELINES,
 )
 from skills.mock_interviewer.state_machine import InterviewStateMachine
+from skills.mock_interviewer.adaptive import close_session, observed_stages, step_adaptive
+from skills.mock_interviewer.telemetry import collect_model_metrics
 from tools.llm_client import LLMClient
 
 
@@ -82,6 +86,10 @@ def start_interview(
     job_description: JobDescription | None = None,
     mode: Literal["simulation", "practice"] = "simulation",
     session_id: str | None = None,
+    flow: Literal["fixed", "adaptive"] = "fixed",
+    policy: InterviewPolicy | None = None,
+    metrics: InterviewRequestMetrics | None = None,
+    request_budget: int | None = None,
 ) -> tuple[InterviewSession, Generator[str, None, None]]:
     """
     初始化面试会话，并返回 (session 实体, 面试官第一句开场白流式生成器)。
@@ -101,6 +109,11 @@ def start_interview(
         target_company=target_company,
         job_description=job_description,
         mode=mode,
+        flow=flow,
+        policy=policy or InterviewPolicy(),
+        enforce_policy=flow == "adaptive" or policy is not None,
+        started_at=time.time(),
+        active_started_at=time.time(),
     )
 
     # 2. 组装开场白消息
@@ -122,7 +135,11 @@ def start_interview(
     ]
 
     # 3. 调大模型流式吐出第 1 句破冰词，并在流输出完成时将问题登记入会话历史
-    raw_stream = llm_client.chat_stream(messages=messages)
+    stream_options = {
+        "max_retries": min(session.policy.max_requests_per_turn, session.policy.max_requests_total, request_budget if request_budget is not None else session.policy.max_requests_total),
+        "timeout": session.policy.request_timeout_seconds,
+    } if session.enforce_policy else {}
+    raw_stream = llm_client.chat_stream(messages=messages, **stream_options)
 
     def generate_and_record() -> Generator[str, None, None]:
         full_response = []
@@ -131,6 +148,7 @@ def start_interview(
                 full_response.append(chunk)
                 yield chunk
         finally:
+            collect_model_metrics(llm_client, metrics)
             llm_client.close()
         q_text = "".join(full_response).strip()
         if q_text:
@@ -146,11 +164,20 @@ def step_interview_stream(
     user_answer: str,
     profile: UserProfile | None = None,
     provider: str | None = None,
+    *, metrics: InterviewRequestMetrics | None = None, request_budget: int | None = None,
 ) -> Generator[str, None, None]:
     """
     接收候选人当前回答，驱动状态机推演，流式生成面试官的下一句提问或追问。
     """
     profile = _resolve_profile(profile)
+    metrics = metrics if metrics is not None else InterviewRequestMetrics()
+    if session.flow == "adaptive":
+        yield from step_adaptive(
+            session, user_answer, profile,
+            client_factory=lambda: _session_client(session, provider),
+            metrics=metrics, request_budget=request_budget,
+        )
+        return
 
     clean_answer = user_answer.strip()
 
@@ -162,8 +189,8 @@ def step_interview_stream(
     if cmd == "finish":
         if session.history and not session.history[-1].answer:
             session.history[-1].answer = "（候选人申请提前结束面试）"
-        session.is_finished = True
-        session.current_stage = InterviewStage.COMPLETED
+        close_session(session, "user_finish")
+        metrics.action = "finish"
         yield "好的，今天的面试到此结束，感谢你的参与。正在为你出具全景复盘体检报告..."
         return
 
@@ -254,7 +281,11 @@ def step_interview_stream(
 
     # 5. 调大模型流式输出新问题，并在结束时登记新轮次
     llm_client = _session_client(session, provider)
-    raw_stream = llm_client.chat_stream(messages=messages)
+    stream_options = {
+        "max_retries": min(session.policy.max_requests_per_turn, request_budget) if request_budget is not None else session.policy.max_requests_per_turn,
+        "timeout": session.policy.request_timeout_seconds,
+    } if session.enforce_policy else {}
+    raw_stream = llm_client.chat_stream(messages=messages, **stream_options)
 
     full_response = []
     try:
@@ -262,6 +293,7 @@ def step_interview_stream(
             full_response.append(chunk)
             yield chunk
     finally:
+        collect_model_metrics(llm_client, metrics)
         llm_client.close()
     new_question = "".join(full_response).strip()
     if new_question and is_reverse_qa_response:
@@ -293,9 +325,10 @@ def finish_interview(
     history_lines = []
     for turn in session.history:
         ans = turn.answer.strip() if turn.answer else "（未作答/已跳过）"
+        label = "训练提示" if turn.kind == "hint" else "重答邀请" if turn.kind == "retry" else "面试官提问"
         history_lines.append(
             f"【轮次 {turn.turn_id} | 阶段: {turn.stage.value}】\n"
-            f"面试官提问: {turn.question}\n"
+            f"{label}: {turn.question}\n"
             f"候选人回答: {ans}"
             + (f"\n面试官回应: {turn.feedback}" if turn.feedback else "")
         )
@@ -309,6 +342,10 @@ def finish_interview(
             "content": (
                 f"【目标岗位】: {session.target_company} · {session.target_role}\n"
                 f"【面试官风格】: {session.role.value}\n"
+                f"【流程/模式】: {session.flow} / {session.mode}\n"
+                f"【结束原因】: {session.stop_reason or '用户交卷'}\n"
+                f"【有回答记录的阶段】: {', '.join(observed_stages(session)) or '未观察到'}\n"
+                "训练提示和重答邀请属于工具帮助，不是候选人事实或已完成成果；只按实际回答评估，证据不足标未观察到。\n"
                 f"【岗位原文】: {session.job_description.raw_text if session.job_description else '未提供 JD，仅按目标岗位评估'}\n\n"
                 f"【整场问答实录 (Transcript)】:\n{transcript_text}\n\n"
                 "请严格按照系统提示词的 JSON 格式规范出具全维度复盘体检报告。"
@@ -367,9 +404,10 @@ def export_interview_report(
     transcript_md = []
     for turn in session.history:
         ans = turn.answer.strip() if turn.answer else "（未作答/已跳过）"
+        label = "面试官·训练提示" if turn.kind == "hint" else "面试官·重答邀请" if turn.kind == "retry" else "面试官"
         transcript_md.append(
             f"**[Round {turn.turn_id} · {turn.stage.value}]**\n\n"
-            f"- **面试官**：{turn.question}\n"
+            f"- **{label}**：{turn.question}\n"
             f"- **候选人**：{ans}\n"
             + (f"- **面试官回应**：{turn.feedback}\n" if turn.feedback else "")
         )

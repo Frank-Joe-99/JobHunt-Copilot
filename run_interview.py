@@ -27,7 +27,7 @@ from rich.table import Table
 from rich.text import Text
 
 from core.config import load_job_preference, load_user_profile
-from core.state import InterviewRole, InterviewStage
+from core.state import InterviewPolicy, InterviewRole, InterviewStage
 from core.interview_service import (
     finish_interview,
     resume_interview,
@@ -330,14 +330,28 @@ def main(
     jd: Optional[str] = typer.Option(None, "--jd", help="可选 JD 文本或本地文本路径"),
     mode: str = typer.Option("simulation", "--mode", help="simulation 模拟 / practice 训练"),
     resume_session: Optional[str] = typer.Option(None, "--resume-session", help="恢复已有会话 ID"),
+    flow: str = typer.Option("fixed", "--flow", help="fixed / adaptive"),
+    max_turns: Optional[int] = typer.Option(None, "--max-turns", min=1, max=60),
+    max_duration: Optional[int] = typer.Option(None, "--max-duration", min=1, max=7200),
+    max_followups: Optional[int] = typer.Option(None, "--max-followups", min=0, max=4),
+    request_budget: Optional[int] = typer.Option(None, "--request-budget", min=1, max=3),
+    max_requests: Optional[int] = typer.Option(None, "--max-requests", min=1, max=180),
+    request_timeout: Optional[int] = typer.Option(None, "--request-timeout", min=1, max=120),
 ) -> None:
     """启动或恢复 AI 模拟面试，保存的事实快照不会随主档案变化。"""
     render_banner()
     try:
         if mode not in ("simulation", "practice"):
             raise ValueError("mode 必须为 simulation 或 practice。")
+        if flow not in ("fixed", "adaptive"):
+            raise ValueError("flow 必须为 fixed 或 adaptive。")
+        policy_values = {key: value for key, value in {
+            "max_turns": max_turns, "max_duration_seconds": max_duration,
+            "max_followups": max_followups, "max_requests_per_turn": request_budget,
+            "max_requests_total": max_requests, "request_timeout_seconds": request_timeout,
+        }.items() if value is not None}
         if resume_session:
-            if any(value is not None for value in (role, company, target_role, jd)):
+            if any(value is not None for value in (role, company, target_role, jd)) or policy_values or flow != "fixed":
                 raise ValueError("恢复使用原岗位、风格和 JD；背景变化请新建会话。")
             session = resume_interview(resume_session)
             stream = None
@@ -356,13 +370,16 @@ def main(
                 profile=profile, target_role=selected_target_role,
                 target_company=selected_company, role=selected_role, provider=provider,
                 job_description=job_description, mode=mode,
+                flow=flow, policy=InterviewPolicy(**policy_values) if policy_values or flow == "adaptive" else None,
             )
     except (FileNotFoundError, ValueError, RuntimeError, OSError) as exc:
         console.print(Panel(str(exc), title="会话初始化失败", border_style="red"))
         raise typer.Exit(code=2) from None
 
     console.print(f"\n[bold green]会话已保存：[/bold green]{session.session_id}")
-    console.print(f"目标：{session.target_company} · {session.target_role}（{session.mode}）", markup=False)
+    console.print(f"目标：{session.target_company} · {session.target_role}（{session.mode} / {session.flow}）", markup=False)
+    if session.flow == "adaptive":
+        console.print("自适应试验：每轮校验动作和完整问题后显示；可新建 --flow fixed 会话回到原流式流程。", markup=False)
     console.print(f"恢复命令：uv run jobhunt interview --resume-session {session.session_id}", markup=False)
     console.print("[dim]/next 跳过；/finish 交卷；/pause 暂停；/retry 重试。[/dim]")
     render_stage_header(session.current_stage, session.role, session.target_company, session.target_role)

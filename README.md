@@ -2,6 +2,8 @@
 
 > 本地优先的开发者智能求职辅助工具与定向交付引擎。通过本地私密 YAML 档案，提供简历双格式排版、STAR 经历提炼、岗位契合度分析、开源练手项目推荐、模拟面试、投递看板与 MCP 跨生态协议服务。
 
+升级阅读入口：[完整升级目录](future-upgrade/UPGRADE-INDEX.md) · [最终开发路线](future-upgrade/FINAL-ROADMAP.md)。
+
 ---
 
 ## 📖 核心特性与架构定位
@@ -105,6 +107,9 @@ uv run python -X utf8 check_config.py
   # 可选：提供 JD 并进入允许提示、讲解的训练模式；旧命令保持可用
   uv run jobhunt interview --target-role 前端开发工程师 --company 示例企业 --jd "前端岗位要求：React 与可访问性" --mode practice
 
+  # 可选：受控自适应试验；默认仍为 fixed 流式流程
+  uv run jobhunt interview --flow adaptive --target-role 前端开发工程师 --company 示例企业 --mode practice
+
   # 中断后恢复原会话（沿用原岗位、事实快照和模式）
   uv run jobhunt interview --resume-session <session_id>
 
@@ -112,6 +117,9 @@ uv run python -X utf8 check_config.py
   uv run jobhunt interview-sessions list
   uv run jobhunt interview-sessions show <session_id>
   uv run jobhunt interview-sessions delete <session_id>
+
+  # 离线对比两场会话的输入条件、延迟及请求数
+  uv run jobhunt interview-sessions compare <fixed_id> --with-session <adaptive_id>
   ```
 - **参数说明**：
   | 参数名 | 必填 | 默认值 | 说明 |
@@ -127,6 +135,8 @@ uv run python -X utf8 check_config.py
   - 输入 `/pause`：暂停并保存；输入 `/retry`：重试未完成请求，不重复登记回答。EOF 或 Ctrl+C 也会暂停。
 - **预期产物**：会话 ID、创建时的档案快照和已提交回答保存在私有 `storage/interviews.db`；完整问题生成成功后才推进相应阶段。复盘只使用正式问答，保存在 `storage/interview_logs/`，缺少证据的维度不强制评分。
 - 恢复不重新读取当前主档案；改变岗位或事实背景请新建会话。原模型/端点配置变化时须显式传 `--provider`。删除会话会一并删除请求记录，已单独导出的 Markdown 报告仍保留，需另行删除。
+- `--flow adaptive` 每轮用一个小决策选择澄清、追问或换阶段，完整校验并保存后展示；训练模式支持提示、重答。默认上限为 16 轮、1800 秒有效时长、连续追问 2 次、每轮 1 次 HTTP 请求、整场问答 32 次请求和单轮 30 秒；复盘另计。通过 `--max-turns`、`--max-duration`、`--max-followups`、`--request-budget`、`--max-requests`、`--request-timeout` 调整，新策略只用于新会话。
+- `fixed` 默认保持原用法；显式提供预算时也会执行共有的轮数、时长和请求限制，便于与自适应试验比较。`show` 显示统计；`compare` 仅核对输入和共有策略、展示服务侧延迟与计数，生成质量需人工比较，见 [M09 试验方法](future-upgrade/M09-EVALUATION.md)。v1 会话库会通过新增指标列原子升级至 v2，旧会话默认保持 fixed。
 
 ---
 

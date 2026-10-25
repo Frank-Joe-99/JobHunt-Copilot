@@ -49,6 +49,8 @@ skills/mock_interviewer/
 ├── state_machine.py       # 状态机：轮次计数、阶段流转判定与快捷指令拦截
 ├── handler.py             # 上下文装配、流式生成与 Markdown 报告导出
 ├── session_store.py       # 独立 SQLite、快照校验、请求状态与短事务
+├── adaptive.py            # 单次动作决策、阶段覆盖和重复问题检查
+├── telemetry.py           # 请求计数与技术状态，不记录正文
 └── README.md              # 本说明文档
 ```
 
@@ -64,7 +66,9 @@ CLI / MCP 共用的持久化入口为 `core/interview_service.py`，核心接口
 4. **`resume_interview(session_id)`**  
    从独立会话库恢复，不重新读取当前主档案、不请求模型。
 
-`start_interview` 支持可选 `job_description`、`mode`；`step_interview_stream` 支持可选 `request_id`；`finish_interview` 默认 `request_id="finish"`。测试可注入 `store=InterviewStore(temporary_path)`。
+`start_interview` 支持可选 `job_description`、`mode`、`flow` 和 `policy=InterviewPolicy(...)`；`step_interview_stream` 支持可选 `request_id`；`finish_interview` 默认 `request_id="finish"`。测试可注入 `store=InterviewStore(temporary_path)`。
+
+`flow="fixed"` 默认保留原流式流程。`flow="adaptive"` 为可选试验：模型返回澄清/追问/换阶段/反问回应等小决策，程序校验允许动作、阶段、重复问题和预算，完整保存后才展示。`mode` 独立决定模拟或训练；提示、重答只在训练模式允许。自适应正文在整轮校验后出现，不能视为与原流式流程相同的首字体验。
 
 ### 状态与一致性
 
@@ -73,7 +77,7 @@ CLI / MCP 共用的持久化入口为 `core/interview_service.py`，核心接口
 - 跨线程、跨进程的会话文件锁阻止并发写入；SQLite 只使用短事务，等待网络时不持有数据库写锁。版本冲突会明确拒绝旧更新。
 - 同一请求 ID 必须对应相同输入；完成结果可跨重启重放。旧请求重放不会回退数据库，但返回的是当时的结果快照，继续新作答前应恢复读取最新会话。
 - 结束是用户的明确指令，立即关闭问答；报告失败可继续重试，不重新开放问答。相同报告请求不重复调用模型；文件丢失时从已保存结果重新导出。
-- schema v1 只初始化空数据库；未知版本、未版本化的旧表或投递数据库会拒绝打开，不自动猜测迁移。
+- 数据库 v2 在精确校验 v1 结构后，以短事务增加 `metrics_json` 列；会话事实和历史 JSON 不重写。空库直接创建 v2，未知版本、未版本化旧表或投递数据库仍拒绝打开。
 
 ---
 
@@ -96,6 +100,9 @@ uv run jobhunt interview
 # 方式 B：指定参数直接启动
 uv run jobhunt interview --role strict_architect --company 字节跳动 --target-role 后端开发
 
+# 受控自适应，训练模式允许提示/重答
+uv run jobhunt interview --flow adaptive --company 示例企业 --target-role 前端开发 --mode practice
+
 # 恢复保存的会话，不需要重新选择岗位或读取主档案
 uv run jobhunt interview --resume-session <session_id>
 
@@ -103,6 +110,7 @@ uv run jobhunt interview --resume-session <session_id>
 uv run jobhunt interview-sessions list
 uv run jobhunt interview-sessions show <session_id>
 uv run jobhunt interview-sessions delete <session_id>
+uv run jobhunt interview-sessions compare <fixed_id> --with-session <adaptive_id>
 ```
 
 #### 步骤 2：参数说明表
@@ -115,6 +123,11 @@ uv run jobhunt interview-sessions delete <session_id>
 | `--mode` | 否 | `simulation` | `practice` 允许提示、讲解 |
 | `--provider` | 否 | 配置默认 | 恢复时默认沿用原供应商；配置模型或端点变化须显式指定 |
 | `--resume-session` | 否 | 无 | 使用原会话快照、岗位与模式，不与新岗位/JD/风格参数混用 |
+| `--flow` | 否 | `fixed` | `adaptive` 为单次决策试验；恢复沿用保存值 |
+| `--max-turns` / `--max-duration` | 否 | 自适应 16 / 1800 秒 | 包含开场，暂停不计时；预算到期仍保存本次回答 |
+| `--max-followups` | 否 | 自适应 2 | 连续追问上限，不是必问次数 |
+| `--request-budget` / `--max-requests` | 否 | 自适应 1 / 32 | 每轮与整场问答 HTTP 请求上限，复盘另计 |
+| `--request-timeout` | 否 | 自适应 30 秒 | 每轮生成限时 |
 
 #### 步骤 3：交互与快捷指令
 - 输入回答内容，连续按**两次回车**提交长文本；
@@ -156,3 +169,11 @@ print(f"报告落盘路径: {report_path}")
 ```
 
 相同作答重试需复用 `request_id` 和原文。背景变化时新建会话；恢复后沿用创建时的事实快照。使用的是配置的大模型服务，离线要求下只运行会话查看/删除，不运行生成流程。
+
+## 自适应试验与指标
+
+达到追问上限或剩余轮数不足以覆盖后续阶段时，只允许进入下一阶段；用户明确跳过也会推进。模型不能用提前结束或阶段跳跃绕过覆盖。最后反问会先得到回应再结束，不额外占一个提问轮数。时长/总请求预算耗尽时程序结束并保留已接受回答，未观察到的内容留给复盘说明。
+
+`show` 增加 `statistics`：已知 HTTP 请求数、崩溃未知请求上界、生成失败率、重试次数、请求耗时及可读文本就绪延迟。缓存回放不增加调用。旧 v1 请求没有历史测量时标记为未测量，不能当零延迟；进程中途退出也不能猜测实际远端扣费数。
+
+对比方法和人工标准见 [M09 试验说明](../../future-upgrade/M09-EVALUATION.md)。当前自动测试验证确定性边界；默认流程保持 fixed，真实模型的质量、成本及延迟通过成对试验后再考虑改变默认值。

@@ -174,6 +174,12 @@ class OfflineModel:
             raise RuntimeError("synthetic interruption")
         yield "离线完整问题"
     def chat_pydantic(self, messages, model_class, **kwargs):
+        if model_class.__name__ == "InterviewDecision":
+            import json
+            self.record("decision")
+            context = json.loads(messages[0]["content"].splitlines()[-1])
+            action = "advance" if "advance" in context["allowed_actions"] else "respond"
+            return model_class(action=action, question="离线下一阶段问题", next_stage=context["advance_to"] if action == "advance" else None)
         self.record("report")
         return model_class(overall_score=0, result="证据不足", summary="合成复盘")
 interview.LLMClient = OfflineModel

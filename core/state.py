@@ -538,6 +538,36 @@ class InterviewRole(str, Enum):
     HRBP = "hrbp"                         # 亲和型 HR 面试官（关注求职动机、团队协作、稳定性与抗压）
 
 
+class InterviewPolicy(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    max_turns: int = Field(16, ge=1, le=60)
+    max_duration_seconds: float = Field(1800, gt=0, le=7200)
+    max_followups: int = Field(2, ge=0, le=4)
+    max_requests_per_turn: int = Field(1, ge=1, le=3)
+    max_requests_total: int = Field(32, ge=1, le=180)
+    request_timeout_seconds: float = Field(30, gt=0, le=120)
+
+
+class InterviewDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["clarify", "follow_up", "advance", "respond", "finish", "hint", "retry_answer"]
+    question: str = Field(min_length=1, max_length=1200)
+    next_stage: InterviewStage | None = None
+
+
+class InterviewRequestMetrics(BaseModel):
+    known_model_requests: int = 0
+    unknown_request_upper_bound: int = 0
+    generation_attempts: int = 0
+    failed_generations: int = 0
+    interrupted_generations: int = 0
+    elapsed_seconds: float = 0
+    first_text_seconds: float | None = None
+    format_used: str | None = None
+    action: str | None = None
+    policy_reason: str | None = None
+
+
 class InterviewTurn(BaseModel):
     """单轮问答记录"""
     turn_id: int = Field(..., description="问答轮次序号 (从 1 开始)")
@@ -545,6 +575,7 @@ class InterviewTurn(BaseModel):
     question: str = Field(..., description="面试官提出的问题")
     answer: str = Field("", description="候选人的回答内容")
     feedback: str = Field("", description="针对本轮回答的即时简析或追问提示")
+    kind: Literal["question", "hint", "retry"] = "question"
 
 
 class InterviewSession(BaseModel):
@@ -563,6 +594,19 @@ class InterviewSession(BaseModel):
     provider_name: str | None = None
     model_fingerprint: str | None = None
     pending_request_id: str | None = None
+    flow: Literal["fixed", "adaptive"] = "fixed"
+    policy: InterviewPolicy = Field(default_factory=InterviewPolicy)
+    enforce_policy: bool = False
+    started_at: float = 0
+    elapsed_active_seconds: float = 0
+    active_started_at: float | None = None
+    consecutive_followups: int = 0
+    stop_reason: str | None = None
+
+    def active_elapsed(self, now: float) -> float:
+        return self.elapsed_active_seconds + (
+            max(0, now - self.active_started_at) if self.active_started_at is not None else 0
+        )
 
 
 class InterviewEvaluationReport(BaseModel):
@@ -601,6 +645,7 @@ class InterviewRequest(BaseModel):
     report_path: str | None = None
     error_code: str | None = None
     attempts: int = 1
+    metrics: InterviewRequestMetrics = Field(default_factory=InterviewRequestMetrics)
 
 
 # ==============================================================================

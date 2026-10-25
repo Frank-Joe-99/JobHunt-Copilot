@@ -74,6 +74,10 @@
 
 仍为 13 个工具，旧参数和成功返回字段兼容。会话保存在独立 `storage/interviews.db`，CLI 与 MCP 共用 `core/interview_service.py`；进程内缓存不是状态来源。新返回字段包括 `revision`、`is_paused` 和 `pending_request_id`。
 
+M09 在 start 增加可选 `flow="adaptive"`，默认仍为 `fixed`。策略参数为 `max_turns`、`max_duration_seconds`、`max_followups`、`max_requests_per_turn`、`max_requests_total`、`request_timeout_seconds`；恢复使用原策略。answer 新增 `flow`、`stop_reason`、`policy_notice` 和 `metrics`。自适应只在完整校验并保存动作/问题后返回文本，不把 JSON 片段作为问题展示；默认每轮最多一次模型 HTTP 请求。提示与重答动作仅用于 `mode="practice"`。
+
+指标区分已知请求数和崩溃遗留请求的未知上界；重复回放不增加计数。离线查看、对比请用 `uv run jobhunt interview-sessions show <id>`、`uv run jobhunt interview-sessions compare <fixed_id> --with-session <adaptive_id>`。这些数据不代替人工生成质量评审，复盘模型请求也不计入实时问答预算。
+
 作答时建议由宿主生成 `request_id`，同一次作答重试必须沿用该 ID 和完全相同的输入；相同 ID 的完整结果直接重放，旧结果不会覆盖数据库中的新阶段。回放旧结果后，先恢复读取当前会话再回答后续问题。未传 ID 的旧用法继续可用，但无法区分“已成功回答的网络重发”和“有意重复相同回答”。`/retry` 自动使用未完成请求原文和原 ID。`/pause` 后用 start 的 `resume_session_id` 恢复。
 
 开场或追问失败会返回 `status="recoverable_error"`，保留会话 ID、待重试 ID 和安全的错误类型；部分问题不进入正式记录。结束问答后即使复盘失败，也可再次调用 finish 重试。默认完成的报告支持重复读取；显式传不同报告 ID 会生成独立报告。查看和删除会话可使用 `uv run jobhunt interview-sessions list|show|delete`，详见主 README。

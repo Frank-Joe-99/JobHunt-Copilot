@@ -146,6 +146,13 @@ def cmd_interview(
     jd: Optional[str] = typer.Option(None, "--jd", help="可选 JD 文本或本地文本路径"),
     mode: str = typer.Option("simulation", "--mode", help="simulation 模拟 / practice 训练"),
     resume_session: Optional[str] = typer.Option(None, "--resume-session", help="恢复已有会话 ID，沿用创建时事实与岗位"),
+    flow: str = typer.Option("fixed", "--flow", help="fixed 兼容流式 / adaptive 自适应试验"),
+    max_turns: Optional[int] = typer.Option(None, "--max-turns", min=1, max=60, help="最多交互轮数（含开场）"),
+    max_duration: Optional[int] = typer.Option(None, "--max-duration", min=1, max=7200, help="有效面试时长上限（秒，暂停不计）"),
+    max_followups: Optional[int] = typer.Option(None, "--max-followups", min=0, max=4, help="自适应连续追问上限"),
+    request_budget: Optional[int] = typer.Option(None, "--request-budget", min=1, max=3, help="每轮最多模型 HTTP 请求数"),
+    max_requests: Optional[int] = typer.Option(None, "--max-requests", min=1, max=180, help="整场问答模型请求上限，复盘另计"),
+    request_timeout: Optional[int] = typer.Option(None, "--request-timeout", min=1, max=120, help="单轮生成限时（秒）"),
 ):
     """
     🎯 【全真 AI 模拟面试官】
@@ -154,6 +161,8 @@ def cmd_interview(
     import run_interview
     if mode not in ("simulation", "practice"):
         raise typer.BadParameter("必须为 simulation 或 practice", param_hint="--mode")
+    if flow not in ("fixed", "adaptive"):
+        raise typer.BadParameter("必须为 fixed 或 adaptive", param_hint="--flow")
     run_interview.main(
         role=role,
         company=company,
@@ -162,22 +171,26 @@ def cmd_interview(
         jd=jd,
         mode=mode,
         resume_session=resume_session,
+        flow=flow, max_turns=max_turns, max_duration=max_duration,
+        max_followups=max_followups, request_budget=request_budget,
+        max_requests=max_requests, request_timeout=request_timeout,
     )
 
 
 @app.command(name="interview-sessions")
 def cmd_interview_sessions(
-    action: str = typer.Argument("list", help="list 列表 / show 查看 / delete 删除会话及请求记录"),
+    action: str = typer.Argument("list", help="list 列表 / show 查看 / compare 对比 / delete 删除"),
     session_id: Optional[str] = typer.Argument(None, help="show / delete 使用的会话 ID"),
     limit: int = typer.Option(20, "--limit", min=1, max=200, help="列表上限"),
+    with_session: Optional[str] = typer.Option(None, "--with-session", help="compare 时的另一个会话 ID"),
 ):
     """离线管理本地面试会话；删除会话不删除单独导出的 Markdown 报告。"""
     from skills.mock_interviewer.session_store import InterviewStore
     store = InterviewStore()
-    if action not in ("list", "show", "delete"):
-        raise typer.BadParameter("必须为 list / show / delete", param_hint="action")
+    if action not in ("list", "show", "compare", "delete"):
+        raise typer.BadParameter("必须为 list / show / compare / delete", param_hint="action")
     if action != "list" and not session_id:
-        raise typer.BadParameter("show / delete 需要会话 ID", param_hint="session_id")
+        raise typer.BadParameter("show / compare / delete 需要会话 ID", param_hint="session_id")
     try:
         if action == "list":
             result = store.list_sessions(limit)
@@ -187,7 +200,13 @@ def cmd_interview_sessions(
             result = {
                 "session": session.model_dump(mode="json"),
                 "unfinished_request": pending.model_dump(mode="json") if pending else None,
+                "statistics": store.statistics(session_id),
             }
+        elif action == "compare":
+            if not with_session:
+                raise typer.BadParameter("compare 需要 --with-session", param_hint="--with-session")
+            from core.interview_service import compare_interviews
+            result = compare_interviews(session_id, with_session, store=store)
         else:
             result = {"session_id": session_id, "deleted": store.delete(session_id)}
     except (ValueError, RuntimeError, OSError) as exc:
