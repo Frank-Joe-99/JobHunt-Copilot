@@ -79,10 +79,13 @@ uv run python -X utf8 check_config.py
   | `--output-name` | `-o` | 否 | 自动根据企业和岗位生成 | 导出简历文件的基本名称（不含扩展名） |
   | `--template` | `-t` | 否 | `modern` | 简历排版模板，可选 `modern`（现代专业）或 `minimal`（极简学术） |
   | `--no-github` | 无 | 否 | `False` | 禁用 GitHub 开源练手项目检索 |
-  | `--no-track` | 无 | 否 | `False` | 禁止自动将本次交付登记到求职看板 |
+  | `--no-track` | 无 | 否 | `False` | 不登记物料准备记录；默认仅登记 `wishlist` 心愿单，不视为已投递 |
 - **预期产物**：
   - 定制简历：`storage/resumes/<output_name>.pdf` 与 `.docx`
   - 交付战报：`storage/exports/package_<company>_<role>_<timestamp>.md`
+  - 完整修改对比与私有快照：`storage/exports/resume_diff_<id>.md`、`resume_snapshot_<id>.json`
+
+定制润色接收完整 JD 与匹配建议，按快照内 ID 修改指定亮点。检测到新增数字、技术名、职责扩大或完成状态疑点的建议会标为待核实并保留原文；机器检查不证明语义真实性。成品按草稿交付，生成物料不代表实际投递。
 
 ---
 
@@ -96,6 +99,9 @@ uv run python -X utf8 check_config.py
 
   # 方式 B：直接指定参数启动
   uv run jobhunt interview --role strict_architect --company 字节跳动 --target-role 后端开发工程师
+
+  # 可选：提供 JD 并进入允许提示、讲解的训练模式；旧命令保持可用
+  uv run jobhunt interview --target-role 前端开发工程师 --company 示例企业 --jd "前端岗位要求：React 与可访问性" --mode practice
   ```
 - **参数说明**：
   | 参数名 | 必填 | 默认值 | 说明 |
@@ -104,6 +110,7 @@ uv run python -X utf8 check_config.py
   | `--company` | 否 | "目标大厂" | 目标企业名称 |
   | `--target-role` | 否 | 档案设定值 | 目标求职岗位 |
 - **交互指令**：
+  - `--jd` 接受 JD 文本或本地文本路径；`--mode` 可选 `simulation`（默认）或 `practice`。技术领域由目标岗位/JD 决定，与面试官风格分离。
   - 输入作答内容后按两次回车提交。
   - 输入 `next`：跳过当前面试环节。
   - 输入 `finish`：提前结束面试并生成复盘报告。

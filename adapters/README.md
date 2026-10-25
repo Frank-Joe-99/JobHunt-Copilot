@@ -55,7 +55,7 @@
 | 工具名称 | 注解属性 | 功能说明 | 关键输入参数 |
 | :--- | :--- | :--- | :--- |
 | `tool_diagnose_ats` | 只读·外部API | 评估简历 ATS 关键词覆盖率、量化指标完整性并打分 | `target_jd_text` (可选), `provider` |
-| `tool_polish_experiences` | 只读·外部API | 基于 STAR 法则优化经历表达（严禁伪造虚假数据） | `provider` |
+| `tool_polish_experiences` | 只读·外部API | 生成带快照定位与待核实标记的改写建议 | `provider`, `jd_text`（可选） |
 
 ### 3. 机会雷达与投递看板
 | 工具名称 | 注解属性 | 功能说明 | 关键输入参数 |
@@ -68,7 +68,7 @@
 ### 4. 场景化模拟面试
 | 工具名称 | 注解属性 | 功能说明 | 关键输入参数 |
 | :--- | :--- | :--- | :--- |
-| `tool_interview_start` | 状态写入 | 创建模拟面试会话，生成面试官首句开场白，返回 `session_id` | `target_company`, `target_role`, `interviewer_role` |
+| `tool_interview_start` | 状态写入 | 创建面试会话并返回 `session_id`，支持可选 JD 和模拟/训练模式 | `target_company`, `target_role`, `interviewer_role`, `jd_text`（可选）, `mode`（默认 `simulation`） |
 | `tool_interview_answer` | 状态写入 | 提交应答，驱动状态机推演并获取面试官追问（支持 `next`/`finish`） | `session_id`, `user_answer` |
 | `tool_interview_finish` | 写入·完结 | 结束面试，生成六维能力复盘报告并持久化为 Markdown 文件 | `session_id` |
 
@@ -79,6 +79,8 @@
 | 资源 URI | 资源名称 | 描述 | MIME 类型 |
 | :--- | :--- | :--- | :--- |
 | `profile://summary` | `candidate_profile_summary` | 本地候选人脱敏个人档案（过滤手机号、邮箱等个人敏感隐私） | `application/json` |
+
+`tool_one_click_tailor` 的原有参数保持可用，返回结果新增 `resume_diff_path`、`resume_snapshot_path`、`review_required` 和 `preparation_status`。`auto_track=true` 仅把物料准备登记为 `wishlist`，不代表已提交申请；默认仍为 `false`。原档案摘要资源保持现有行为，模型分析调用使用独立的业务字段白名单。
 
 ---
 

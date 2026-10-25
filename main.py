@@ -9,8 +9,9 @@ from typing import Optional
 
 # 确保 Windows 终端 UTF-8 编码
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding="utf-8")
-    sys.stderr.reconfigure(encoding="utf-8")
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     try:
         sys.stdin.reconfigure(encoding="utf-8")
     except Exception:
@@ -51,7 +52,7 @@ def cmd_tailor(
     template: str = typer.Option("modern", "--template", "-t", help="简历排版模板 (默认: modern)"),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help="大模型供应商 (如: deepseek/aliyun/custom)"),
     no_github: bool = typer.Option(False, "--no-github", help="跳过 GitHub 开源实战项目检索"),
-    no_track: bool = typer.Option(False, "--no-track", help="不自动将本次投递登记到投递看板"),
+    no_track: bool = typer.Option(False, "--no-track", help="不登记物料准备记录；默认仅登记心愿单，不视为已投递"),
 ):
     """
     🚀 【一键岗位定向全套交付流】
@@ -87,12 +88,14 @@ def cmd_tailor(
     table.add_row("📄 PDF 定制简历", str(pdf_p.resolve()) if pdf_p.exists() else "生成中")
     table.add_row("📝 Word 定制简历", str(docx_p.resolve()) if docx_p.exists() else "生成中")
     table.add_row("📊 综合交付物料战报", str(report_p.resolve()) if report_p.exists() else "未落盘")
+    table.add_row("修改对比（草稿）", package.resume_diff_path)
+    table.add_row("事实核实", "存疑建议未应用，保留原文" if package.review_required else "请核对事实后使用")
 
     console.print(table)
     console.print(Panel(
         f"[bold green]✔ 一键定向交付全部完成！[/bold green]\n"
         f"自荐信草稿与缺口补强方案已写入：[underline]{report_p}[/underline]\n"
-        f"简历已就绪，祝您直投顺畅、早日拿 Offer！",
+        f"简历草稿已生成，请结合修改对比核实后使用。物料生成不表示已经投递。",
         border_style="green"
     ))
 
@@ -139,17 +142,23 @@ def cmd_interview(
     company: Optional[str] = typer.Option(None, "--company", "-c", help="目标企业名称 (如: 字节跳动)"),
     target_role: Optional[str] = typer.Option(None, "--target-role", help="目标求职岗位 (如: 后端开发工程师)"),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help="大模型供应商"),
+    jd: Optional[str] = typer.Option(None, "--jd", help="可选 JD 文本或本地文本路径"),
+    mode: str = typer.Option("simulation", "--mode", help="simulation 模拟 / practice 训练"),
 ):
     """
     🎯 【全真 AI 模拟面试官】
     启动终端沉浸式场景化模拟面试：5 大面试阶段流转、三大真实面试官人设追问、全景复盘体检报告。
     """
     import run_interview
+    if mode not in ("simulation", "practice"):
+        raise typer.BadParameter("必须为 simulation 或 practice", param_hint="--mode")
     run_interview.main(
         role=role,
         company=company,
         target_role=target_role,
         provider=provider,
+        jd=jd,
+        mode=mode,
     )
 
 

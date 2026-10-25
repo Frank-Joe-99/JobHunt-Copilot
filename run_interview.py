@@ -11,8 +11,9 @@ from typing import Optional
 
 # 确保控制台 UTF-8 输入输出正常 (兼容 Windows Terminal)
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding="utf-8")
-    sys.stderr.reconfigure(encoding="utf-8")
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     try:
         sys.stdin.reconfigure(encoding="utf-8")
     except Exception:
@@ -242,7 +243,7 @@ def render_debrief_dashboard(report, file_path: Path) -> None:
 
     score_panel = Panel(
         f"综合总分: [{score_color}]{score} / 100[/{score_color}]   "
-        f"面试结果建议: [{verdict_color}]{report.result}[/{verdict_color}]\n\n"
+        f"练习结果建议: [{verdict_color}]{report.result}[/{verdict_color}]\n\n"
         f"[dim]{report.summary}[/dim]",
         title="[bold]📊 综合评级[/bold]",
         border_style="cyan",
@@ -251,7 +252,7 @@ def render_debrief_dashboard(report, file_path: Path) -> None:
     console.print(score_panel)
 
     # 2. 多维度打分条形表
-    table = Table(title="📈 五维专业能力诊断", border_style="blue", expand=False)
+    table = Table(title="📈 岗位相关能力诊断", border_style="blue", expand=False)
     table.add_column("能力维度", style="bold white", width=16)
     table.add_column("分值", style="bold", width=8)
     table.add_column("表现诊断条", width=26)
@@ -301,6 +302,8 @@ def main(
     company: Optional[str] = typer.Option(None, "--company", "-c", help="目标企业名称"),
     target_role: Optional[str] = typer.Option(None, "--target-role", "-t", help="目标岗位名称"),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help="指定大模型供应商 (默认使用 settings.yaml 默认配置)"),
+    jd: Optional[str] = typer.Option(None, "--jd", help="可选 JD 文本或本地文本路径"),
+    mode: str = typer.Option("simulation", "--mode", help="simulation 模拟 / practice 训练"),
 ) -> None:
     """启动全真 AI 模拟面试"""
     render_banner()
@@ -317,18 +320,24 @@ def main(
 
     # 2. 启动面试并流式打出第 1 句开场白
     try:
+        if mode not in ("simulation", "practice"):
+            raise ValueError("mode 必须为 simulation 或 practice。")
         profile = load_user_profile()
-    except Exception as e:
-        console.print(f"[yellow]提示：未找到真实 profile.yaml，将使用内置基础画像 ({e})[/yellow]")
-        profile = None
-
-    try:
+        job_description = None
+        if jd:
+            from core.workflow import _resolve_jd_text
+            from core.state import JobDescription
+            job_description = JobDescription(
+                company=selected_company, role=selected_target_role, raw_text=_resolve_jd_text(jd),
+            )
         session, stream = start_interview(
             profile=profile,
             target_role=selected_target_role,
             target_company=selected_company,
             role=selected_role,
             provider=provider,
+            job_description=job_description,
+            mode=mode,
         )
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         console.print(

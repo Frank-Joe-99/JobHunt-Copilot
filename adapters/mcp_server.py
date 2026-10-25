@@ -171,7 +171,7 @@ async def tool_one_click_tailor(
 
     Args:
         jd_text: 目标岗位的招聘 JD 纯文本或文件路径
-        auto_track: 是否在生成定制简历后自动将其登记到投递看板（默认 False，不自动写入看板）
+        auto_track: 是否把物料准备登记为心愿单（默认 False；生成成功不代表已投递）
         enable_github: 是否针对技能短板检索 GitHub 开源实战项目（默认 True）
         provider: 可选的大模型供应商
 
@@ -207,6 +207,10 @@ async def tool_one_click_tailor(
             "docx_resume": package.resume_files.get("docx", ""),
             "package_report_path": package.package_report_path,
             "cover_letter_draft": package.match_result.cover_letter_draft,
+            "resume_diff_path": package.resume_diff_path,
+            "resume_snapshot_path": package.resume_snapshot_path,
+            "review_required": package.review_required,
+            "preparation_status": package.preparation_status,
         },
         ensure_ascii=False,
         indent=2,
@@ -331,6 +335,7 @@ def tool_diagnose_ats(
 @_mcp_tool_safe
 def tool_polish_experiences(
     provider: str | None = None,
+    jd_text: str | None = None,
 ) -> str:
     """
     基于 STAR 法则（情境/任务/行动/结果）对简历中的实习经历、项目经历与科研经历进行深度润色强化。
@@ -343,7 +348,7 @@ def tool_polish_experiences(
     """
     from skills.resume_polisher import polish_experiences
 
-    report = polish_experiences(provider=provider)
+    report = polish_experiences(provider=provider, jd_text=jd_text)
     return report.model_dump_json(indent=2)
 
 
@@ -390,6 +395,8 @@ def tool_interview_start(
     target_role: str = "后端开发工程师",
     interviewer_role: INTERVIEW_ROLE_VALUES = "strict_architect",
     provider: str | None = None,
+    jd_text: str | None = None,
+    mode: Literal["simulation", "practice"] = "simulation",
 ) -> str:
     """
     初始化一场沉浸式 AI 模拟面试会话。
@@ -405,7 +412,7 @@ def tool_interview_start(
         JSON 包含 session_id、面试官第一句开场白及当前阶段
     """
     from skills.mock_interviewer import start_interview
-    from core.state import InterviewRole
+    from core.state import InterviewRole, JobDescription
 
     role_enum = InterviewRole(interviewer_role)
     session, stream = start_interview(
@@ -413,6 +420,8 @@ def tool_interview_start(
         target_company=target_company,
         role=role_enum,
         provider=provider,
+        job_description=JobDescription(company=target_company, role=target_role, raw_text=jd_text) if jd_text else None,
+        mode=mode,
     )
 
     opening_question = "".join(list(stream)).strip()

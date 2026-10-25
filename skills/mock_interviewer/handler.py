@@ -3,14 +3,15 @@ AI 场景化模拟面试官业务处理器 (Mock Interviewer Handler)
 负责统筹状态机推进、提示词注入、流式问答对话与面试复盘体检报告生成。
 """
 
+import json
 import time
 from pathlib import Path
-from typing import Generator
+from typing import Generator, Literal
 
 from core.config import load_user_profile, PROJECT_ROOT
+from core.context import candidate_context
 from core.state import (
-    Basics,
-    Education,
+    JobDescription,
     InterviewEvaluationReport,
     InterviewRole,
     InterviewSession,
@@ -30,90 +31,46 @@ from tools.llm_client import LLMClient
 
 
 def _resolve_profile(profile: UserProfile | None) -> UserProfile:
-    """获取用户画像，若未提供或配置文件缺失，则安全生成内置默认画像"""
-    if profile is not None:
-        return profile
-    try:
-        return load_user_profile()
-    except Exception:
-        return UserProfile(
-            basics=Basics(
-                name="求职者",
-                birth_year=2002,
-                phone="13800000000",
-                email="candidate@example.com",
-                location="北京",
-            ),
-            education=[Education(school="目标高校", degree="本科", major="计算机科学与技术", start_date="2020", end_date="2024")],
-        )
+    """真实档案缺失或损坏时报告配置错误，不将示例身份当成候选人事实。"""
+    return profile if profile is not None else load_user_profile()
 
 
 def _build_profile_summary(
-    profile: UserProfile, target_company: str, target_role: str
+    profile: UserProfile, target_company: str, target_role: str,
+    job_description: JobDescription | None = None,
 ) -> str:
-    """提取候选人关键画像（学历、代表项目、核心技能、实习），供面试官提问参考"""
-    latest_edu = profile.education[0] if profile.education else None
-    school = profile.basics.school or (latest_edu.school if latest_edu else "高校")
-    degree = profile.basics.degree or (latest_edu.degree if latest_edu else "应届")
-    major = latest_edu.major if latest_edu else (profile.basics.department or "")
+    return json.dumps({
+        "target_company": target_company,
+        "target_role": target_role,
+        "job_description": job_description.model_dump() if job_description else None,
+        "candidate_facts": candidate_context(profile),
+    }, ensure_ascii=False, indent=2)
 
-    # 项目经历精炼
-    projects_summary = []
-    for p in profile.projects[:4]:
-        hl = "；".join(p.highlights[:2]) if p.highlights else ""
-        projects_summary.append(f"- 【{p.name}】（角色：{p.role or '核心开发'}）：{hl}")
-    proj_str = "\n".join(projects_summary) if projects_summary else "（暂无具体项目经历）"
 
-    # 科研经历精炼（硕博候选人的核心证据不能被遗漏）
-    research_summary = []
-    for item in profile.research[:3]:
-        hl = "；".join(item.highlights[:2]) if item.highlights else ""
-        research_summary.append(f"- 【{item.name}】（角色：{item.role or '研究成员'}）：{hl}")
-    research_str = "\n".join(research_summary) if research_summary else "（暂无科研经历）"
-
-    # 实习经历精炼
-    intern_summary = []
-    for it in profile.internships[:2]:
-        hl = "；".join(it.highlights[:2]) if it.highlights else ""
-        intern_summary.append(f"- 【{it.company}】（岗位：{it.role}）：{hl}")
-    intern_str = "\n".join(intern_summary) if intern_summary else "（暂无实习经历）"
-
-    # 技能清单精炼
-    skills_parts = []
-    if profile.skills:
-        if profile.skills.programming_languages:
-            langs = [
-                f"{pl.name}（{pl.level}{'；' + pl.details if pl.details else ''}）"
-                for pl in profile.skills.programming_languages
-            ]
-            skills_parts.append(f"编程语言: {', '.join(langs)}")
-        if profile.skills.frameworks_and_tools:
-            skills_parts.append(f"框架与工具: {', '.join(profile.skills.frameworks_and_tools)}")
-        if profile.skills.databases:
-            skills_parts.append(f"数据库/中间件: {', '.join(profile.skills.databases)}")
-    skills_str = " | ".join(skills_parts) if skills_parts else "（未提供）"
-
-    return (
-        f"【目标求职岗位】: {target_company} · {target_role}\n"
-        f"【候选人信息】: {profile.basics.name} ({school} / {degree} / {major})\n"
-        f"【核心技能】: {skills_str}\n"
-        f"【代表实战项目】:\n{proj_str}\n"
-        f"【代表科研项目】:\n{research_str}\n"
-        f"【过往实习经历】:\n{intern_str}"
-    )
+def _mode_instruction(mode: str) -> str:
+    if mode == "practice":
+        return "当前为训练模式：用户请求提示、讲解或重答时可以提供帮助；示范不得冒充其真实经历。"
+    return "当前为模拟模式：保持考官视角，不替候选人作答；用户仍可跳过或结束。"
 
 
 def start_interview(
     profile: UserProfile | None = None,
-    target_role: str = "AI infra 研究员",
+    target_role: str | None = None,
     target_company: str = "目标大厂",
     role: InterviewRole = InterviewRole.STRICT_ARCHITECT,
     provider: str | None = None,
+    *,
+    job_description: JobDescription | None = None,
+    mode: Literal["simulation", "practice"] = "simulation",
 ) -> tuple[InterviewSession, Generator[str, None, None]]:
     """
     初始化面试会话，并返回 (session 实体, 面试官第一句开场白流式生成器)。
     """
     profile = _resolve_profile(profile)
+
+    target_role = target_role or (job_description.role if job_description else None) or (
+        profile.objective.target_role if profile.objective else "技术岗位"
+    )
 
     # 1. 创建会话实体
     session = InterviewSession(
@@ -122,23 +79,21 @@ def start_interview(
         current_stage=InterviewStage.INTRO,
         target_role=target_role,
         target_company=target_company,
+        job_description=job_description,
+        mode=mode,
     )
 
     # 2. 组装开场白消息
     llm_client = LLMClient(provider=provider)
-    system_prompt = f"{INTERVIEWER_PERSONAS[role]}\n\n{FACTUALITY_GUARDRAIL}"
-
-    latest_edu = profile.education[0] if profile.education else None
-    school = profile.basics.school or (latest_edu.school if latest_edu else "高校")
-    degree = profile.basics.degree or (latest_edu.degree if latest_edu else "应届")
-    major = latest_edu.major if latest_edu else (profile.basics.department or "")
-
+    system_prompt = (
+        f"{INTERVIEWER_PERSONAS[role]}\n\n{FACTUALITY_GUARDRAIL}\n\n"
+        f"{_mode_instruction(mode)}\n\n"
+        f"【岗位与候选人业务材料】:\n{_build_profile_summary(profile, target_company, target_role, job_description)}"
+    )
     intro_instruction = (
-        f"{STAGE_GUIDELINES[InterviewStage.INTRO]}\n\n"
-        f"【面试目标】: {target_company} - {target_role}\n"
-        f"【候选人姓名】: {profile.basics.name}\n"
-        f"【当前学历专业】: {school} / {degree} / {major}\n"
-        "请作为面试官直接说出你的第一句开场白（向候选人问好并邀请其做自我介绍）。注意：直接说出台词，不要带任何括号旁白说明。"
+        f"{STAGE_GUIDELINES[InterviewStage.INTRO]}\n"
+        "你正在模拟目标岗位的面试，不要声称自己实际受雇于该公司或知道其内部信息。"
+        "请简短问好并邀请候选人自我介绍，不使用候选人姓名和联系方式。"
     )
 
     messages = [
@@ -156,16 +111,12 @@ def start_interview(
                 full_response.append(chunk)
                 yield chunk
         finally:
-            q_text = "".join(full_response).strip()
-            if q_text:
-                session.history.append(
-                    InterviewTurn(
-                        turn_id=1,
-                        stage=InterviewStage.INTRO,
-                        question=q_text,
-                        answer="",
-                    )
-                )
+            llm_client.close()
+        q_text = "".join(full_response).strip()
+        if q_text:
+            session.history.append(InterviewTurn(
+                turn_id=1, stage=InterviewStage.INTRO, question=q_text, answer="",
+            ))
 
     return session, generate_and_record()
 
@@ -248,14 +199,18 @@ def step_interview_stream(
     else:
         directive = (
             f"{DRILL_DOWN_DIRECTIVE}\n"
-            f"请针对候选人刚才的回答一针见血地追问底层原理、指标量化或边界极限（150字以内，保持考官视角，直接说台词，不要带任何括号旁白说明）。"
+            "请围绕当前岗位和回答提出一个有价值的追问，简短表达，不预设技术领域或强求无关指标。"
         )
 
+    if session.mode == "practice":
+        directive += "\n训练模式下，用户请求提示、讲解或重答时优先帮助其当前问题，不必机械提出新问题。"
+
     # 4. 组装对话历史上下文
-    profile_summary = _build_profile_summary(profile, session.target_company, session.target_role)
+    profile_summary = _build_profile_summary(profile, session.target_company, session.target_role, session.job_description)
     system_prompt = (
         f"{INTERVIEWER_PERSONAS[session.role]}\n\n"
         f"{FACTUALITY_GUARDRAIL}\n\n"
+        f"{_mode_instruction(session.mode)}\n\n"
         f"【候选人背景画像】:\n{profile_summary}\n\n"
         f"【当前面试阶段】: {session.current_stage.value}"
     )
@@ -287,20 +242,17 @@ def step_interview_stream(
             full_response.append(chunk)
             yield chunk
     finally:
-        new_question = "".join(full_response).strip()
-        if new_question and is_reverse_qa_response:
-            session.history[-1].feedback = new_question
-            session.current_stage = InterviewStage.COMPLETED
-            session.is_finished = True
-        elif new_question:
-            session.history.append(
-                InterviewTurn(
-                    turn_id=len(session.history) + 1,
-                    stage=session.current_stage,
-                    question=new_question,
-                    answer="",
-                )
-            )
+        llm_client.close()
+    new_question = "".join(full_response).strip()
+    if new_question and is_reverse_qa_response:
+        session.history[-1].feedback = new_question
+        session.current_stage = InterviewStage.COMPLETED
+        session.is_finished = True
+    elif new_question:
+        session.history.append(InterviewTurn(
+            turn_id=len(session.history) + 1, stage=session.current_stage,
+            question=new_question, answer="",
+        ))
 
 
 def finish_interview(
@@ -335,7 +287,8 @@ def finish_interview(
             "role": "user",
             "content": (
                 f"【目标岗位】: {session.target_company} · {session.target_role}\n"
-                f"【面试官风格】: {session.role.value}\n\n"
+                f"【面试官风格】: {session.role.value}\n"
+                f"【岗位原文】: {session.job_description.raw_text if session.job_description else '未提供 JD，仅按目标岗位评估'}\n\n"
                 f"【整场问答实录 (Transcript)】:\n{transcript_text}\n\n"
                 "请严格按照系统提示词的 JSON 格式规范出具全维度复盘体检报告。"
             ),
@@ -343,11 +296,11 @@ def finish_interview(
     ]
 
     # 3. 结构化反序列化生成报告实体
-    llm_client = LLMClient(provider=provider)
-    report = llm_client.chat_pydantic(
-        messages=messages,
-        model_class=InterviewEvaluationReport,
-    )
+    with LLMClient(provider=provider) as llm_client:
+        report = llm_client.chat_pydantic(
+            messages=messages,
+            model_class=InterviewEvaluationReport,
+        )
 
     # 4. 渲染 Markdown 报告
     timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -360,7 +313,7 @@ def finish_interview(
     for dim, score in report.dimension_scores.items():
         tag = "🟢 优秀" if score >= 85 else ("🟡 良好" if score >= 70 else "🔴 需加固")
         dim_rows.append(f"| {dim} | {score} | {tag} |")
-    dim_table = "\n".join(dim_rows) if dim_rows else "| 综合能力 | 80 | 🟡 良好 |"
+    dim_table = "\n".join(dim_rows) if dim_rows else "| 未观察到 | — | 问答证据不足，未评分 |"
 
     # 格式化亮点与短板
     highlights_md = (
@@ -371,7 +324,7 @@ def finish_interview(
     weaknesses_md = (
         "\n".join(f"- {w}" for w in report.weaknesses)
         if report.weaknesses
-        else "- 表现平稳，无显著硬伤"
+        else "- 本次未给出有依据的短板结论"
     )
 
     # 格式化标准满分范例
