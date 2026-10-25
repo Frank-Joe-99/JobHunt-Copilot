@@ -1,5 +1,6 @@
 from enum import Enum
-from pydantic import BaseModel, Field, AliasChoices
+from typing import Literal
+from pydantic import BaseModel, Field, AliasChoices, ConfigDict
 
 
 # ==============================================================================
@@ -274,8 +275,23 @@ class LLMProviderConfig(BaseModel):
     api_key: str = Field(..., description="大模型厂商 API Key（必填）")
     base_url: str | None = Field(None, description="API 基础请求 URL（选填）")
     model: str = Field(..., description="模型名称或版本号，如：deepseek-chat, gpt-4o, claude-3-5-sonnet")
-    temperature: float = Field(0.3, ge=0.0, le=2.0, description="采样温度")
+    temperature: float | None = Field(0.3, ge=0.0, le=2.0, description="采样温度；null 时省略")
     max_tokens: int | None = Field(None, gt=0, description="最大生成 token 数（选填）")
+    supports_temperature: bool = True
+    token_limit_parameter: Literal["max_tokens", "max_completion_tokens"] = "max_tokens"
+    output_token_limit: int | None = Field(None, gt=0, description="端点允许的最大输出预算")
+    context_char_limit: int | None = Field(100000, gt=0, description="输入字符预算；超限报错而不截断")
+    supports_json_mode: bool | None = Field(None, description="null 沿用供应商兼容默认；false 禁用 JSON mode")
+
+
+class LLMResponseMetadata(BaseModel):
+    """调用状态；不保存请求正文、回复正文或密钥。"""
+    status: str = "pending"
+    finish_reason: str | None = None
+    request_id: str | None = None
+    http_status: int | None = None
+    usage: dict[str, int] = Field(default_factory=dict)
+    json_repaired: bool = False
 
 
 class LLMConfig(BaseModel):
@@ -327,12 +343,38 @@ class PolishedItem(BaseModel):
     action: str = Field("", description="核心行动")
     result: str = Field("", description="量化成果")
     improvement_reason: str = Field("", description="提分亮点")
+    snapshot_id: str | None = None
+    target_ref: str | None = None
+    expected_original_hash: str | None = None
+    needs_confirmation: bool = False
+    review_reasons: list[str] = Field(default_factory=list)
 
 
 class ResumePolishReport(BaseModel):
     """整份简历润色综合报告"""
     summary: str = Field(..., description="总体评述")
     items: list[PolishedItem] = Field(default_factory=list, description="逐条润色清单")
+    snapshot_id: str | None = None
+    needs_confirmation: bool = False
+
+
+class HighlightTarget(BaseModel):
+    """仅在冻结快照内有效的亮点定位；禁止作为任意访问表达式执行。"""
+    model_config = ConfigDict(frozen=True)
+    target_ref: str
+    section: Literal["internships", "projects", "research"]
+    item_index: int
+    highlight_index: int
+    source: str
+    original: str
+    original_hash: str
+
+
+class ResumeSnapshot(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    snapshot_id: str
+    profile_hash: str
+    targets: tuple[HighlightTarget, ...] = ()
 
 
 class ATSScoreReport(BaseModel):
@@ -375,6 +417,12 @@ class MatchResult(BaseModel):
     missing_skills: list[SkillGap] = Field(default_factory=list, description="缺失技能")
     resume_tuning_advice: list[str] = Field(default_factory=list, description="简历调优建议")
     cover_letter_draft: str = Field("", description="自荐信草稿")
+
+
+class JobMatchEvaluation(BaseModel):
+    """核心编排层向岗位雷达传递的评估结果。"""
+    job: JobDescription
+    match: MatchResult
 
 
 class ProjectRecommendation(BaseModel):
@@ -469,6 +517,8 @@ class InterviewSession(BaseModel):
     target_role: str = Field("后端开发工程师", description="面试目标岗位名称")
     target_company: str = Field("目标企业", description="面试目标企业名称")
     is_finished: bool = Field(False, description="整场面试是否已完成")
+    job_description: JobDescription | None = None
+    mode: Literal["simulation", "practice"] = "simulation"
 
 
 class InterviewEvaluationReport(BaseModel):
@@ -512,6 +562,10 @@ class TailoredApplicationPackage(BaseModel):
     package_report_path: str = Field(
         "", description="保存到本地的 Markdown 综合交付战报物理路径"
     )
+    resume_diff_path: str = ""
+    resume_snapshot_path: str = ""
+    review_required: bool = False
+    preparation_status: str = "draft"
 
 
 # ==============================================================================

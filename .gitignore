@@ -173,3 +173,4 @@ htmlcov/
 # 根目录临时调试与联调脚本（如 test_xxx.py, debug_xxx.py）
 test_*.py
 debug_*.py
+!tests/test_*.py
