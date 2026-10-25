@@ -1,5 +1,9 @@
 # 🔧 tools/ 目录：底层基础设施与外设驱动层
 
+模型能力配置新增 `supports_temperature`、可空的 `temperature`、`token_limit_parameter`、`output_token_limit`、`context_char_limit` 和 `supports_json_mode`，见 `config/settings.example.yaml`。只修改本地配置时才影响具体端点；不按模型名称猜测能力。输入按字符预算检查，超限明确报错而不裁掉经历；输出不再统一截为 8192。
+
+`chat()` 仍返回字符串，`chat_stream()` 仍返回字符串生成器。调用状态通过 `last_response` 暴露（包括结束原因、HTTP 状态、用量和 JSON 修复标记，不含正文）。拒绝、截断、缺少正常结束原因和流中断会报错；经过结构修复的 JSON 不直接作为正式 Pydantic 业务结果。原生 schema 与分层自动降级留待 M08，不在本批实施。
+
 > 本模块为 JobHunt-Copilot 提供**底层网络通信与外部 API 驱动封装**。负责处理与大模型服务提供商及 GitHub REST API 的网络交互，实现连接池复用、故障重试与数据反序列化。
 
 ---

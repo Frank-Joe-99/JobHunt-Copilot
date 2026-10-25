@@ -26,6 +26,12 @@ llm:
       model: "gpt-4o"
       temperature: 0.3
       max_tokens: 4096
+      # 按实际端点能力配置；temperature: null 或 supports_temperature: false 均可省略采样参数。
+      supports_temperature: true
+      token_limit_parameter: max_tokens  # 部分端点显式使用 max_completion_tokens
+      output_token_limit: null          # 超过配置上限时报错，不静默截断
+      context_char_limit: 100000        # 应用输入字符预算，不代表模型 token 窗口
+      supports_json_mode: null          # true/false 显式指定；null 沿用供应商兼容默认
 
     claude:
       api_key: "sk-ant-your-claude-api-key"
