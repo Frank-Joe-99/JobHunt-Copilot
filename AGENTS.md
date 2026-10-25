@@ -27,3 +27,7 @@ JobHunt-Copilot：本地优先的应届生求职工具（简历生成、JD 匹�
 - 凡是会被 `adapters/mcp_server.py` 调用到的代码路径，**禁止向 stdout 写内容**（`print`、rich `Console()` 默认输出）：stdio 传输用 stdout 承载 JSON-RPC，杂项输出会破坏协议。需要日志时使用 `logging` 或写 stderr。
 - 不要提交 `tmp/`、`storage/`、`config/*.yaml`（非 example）。
 - 修改 `main.py` 的 CLI 参数时，同步更新 `.agents/skills/*/SKILL.md` 中引用的命令。
+
+## Git 提交
+- 每完成一个独立功能，暂存该功能的代码、相关测试和文档，并创建本地 commit；提交信息说明具体改动。
+- 提交前核对暂存范围，避免混入无关改动；继续遵守上面的隐私与产物排除规则。
