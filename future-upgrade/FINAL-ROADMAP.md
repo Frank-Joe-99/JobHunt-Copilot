@@ -2,7 +2,7 @@
 
 更新日期：2026-10-26  
 适用范围：当前本地优先的 CLI / MCP 项目，按单人或小团队维护成本设计。  
-文档状态：融合[初版路线](README.md)与[可行性审核](Adverse.md)后的实施基准。两份原文保留作为讨论记录，开发顺序以本文为准。
+文档状态：融合[初版路线](INITIAL-ANALYSIS.md)与[可行性审核](Adverse.md)后的实施基准。两份原文保留作为讨论记录，开发顺序以本文为准。
 
 当前进展：前三批 M01～M09 均已实现，完整回归为 157 项。第一、二、三批记录分别见 [M01～M05](BATCH-1-IMPLEMENTATION.md)、[M06～M07](BATCH-2-IMPLEMENTATION.md)、[M08～M09](BATCH-3-IMPLEMENTATION.md)，总览见[完整升级目录](UPGRADE-INDEX.md)。M09 通过可选 `--flow adaptive` 提供，默认保留 fixed；真实模型的质量、成本和延迟仍需成对验证。M10～M12 仍为后续规划。应用测试使用合成材料、临时目录和模拟服务，没有读取真实个人配置或调用真实模型、GitHub。
 
