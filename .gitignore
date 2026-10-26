@@ -94,6 +94,9 @@ config/assets/*
 !config/assets/README.md
 !config/assets/sample_*
 
+# 本地升级规划与评审记录
+/future-upgrade/
+
 # ==============================================================================
 # Storage & Generated Outputs (严格隐私保护)
 # 运行产生的简历成品、目标岗位原始描述、数据库、雷达简报与面试录音/文本
